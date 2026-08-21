@@ -1,0 +1,15 @@
+{
+  "//": "Realtime Database rules — Minerva does NOT use this product.",
+  "//1": "Everything Minerva stores lives in Cloud Firestore (see firestore.rules).",
+  "//2": "This file exists so the unused database is closed rather than left in",
+  "//3": "whatever state it was created in. A Realtime Database opened in test",
+  "//4": "mode is readable and writable by anyone on the internet who knows the",
+  "//5": "project id — an open door on a product you are not even using.",
+  "//6": "Publish at: Firebase console -> Build -> Realtime Database -> Rules.",
+  "//7": "If you have never created a Realtime Database, skip this entirely.",
+
+  "rules": {
+    ".read": false,
+    ".write": false
+  }
+}

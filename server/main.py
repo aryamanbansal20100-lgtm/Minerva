@@ -487,6 +487,42 @@ class Handler(SimpleHTTPRequestHandler):
                 self.headers.get("X-Mail-Token", ""),
                 q.get("days", "14")))
 
+        if path == "/api/backup":
+            # A plain answer to "are my notes safe if this machine dies?".
+            # It was previously unanswerable: sync failures were swallowed, so
+            # a broken backup and a perfect one looked identical from here.
+            st = cloud.status()
+            local = {
+                "notes": len(store.notes(limit=1000)),
+                "documents": len(store.documents()),
+                "tasks": len(store.tasks(open_only=False)),
+            }
+            if not st["enabled"]:
+                verdict = "off"
+                say = ("Cloud backup is switched off. Your notes live only on "
+                       "this device.")
+            elif not st["connected"]:
+                verdict = "signed-out"
+                say = "Sign in with Google to back your notes up."
+            elif st["failed"] and not st["saved"]:
+                verdict = "failing"
+                say = ("Nothing is reaching the cloud. Firestore is rejecting "
+                       "every write — publish the rules in firestore.rules. "
+                       "Your notes are still safe on this device.")
+            elif st["failed"]:
+                verdict = "partial"
+                say = ("Some things saved and some failed. Check the rules in "
+                       "firestore.rules.")
+            elif st["saved"]:
+                verdict = "ok"
+                say = "Your notes are backed up and will follow you to any device."
+            else:
+                verdict = "idle"
+                say = ("Nothing has needed saving yet. Make or open a note and "
+                       "check again.")
+            return self._json({"verdict": verdict, "message": say,
+                               "cloud": st, "local": local})
+
         if path == "/api/assessments":
             return self._json(self._assessments())
 

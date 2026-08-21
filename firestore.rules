@@ -1,0 +1,48 @@
+rules_version = '2';
+
+/*
+  Firestore security rules for Minerva.
+
+  Paste these into the Firebase console:
+      Firestore Database -> Rules -> replace everything -> Publish
+
+  Why this file exists: Firestore's default rules deny every read and write.
+  With those in place the app kept working perfectly on the laptop — because
+  the laptop stores notes in its own file — while every attempt to mirror them
+  to the cloud was rejected. Nothing surfaced, because the sync code swallowed
+  failures, so the cloud copy silently stayed empty. The first sign of trouble
+  was signing in on another machine and finding nothing there.
+
+  The rule below is deliberately strict rather than convenient:
+
+    - A student can read and write ONLY the documents under their own user id.
+      Nobody can read another student's notes, and there is no path that lets
+      one account touch another's data even by accident.
+    - Everything else in the database is denied outright, so a future feature
+      cannot accidentally expose data by forgetting a rule.
+
+  The app writes:
+      /users/{uid}                       the profile
+      /users/{uid}/notes/{noteId}
+      /users/{uid}/tasks/{taskId}
+      /users/{uid}/documents/{docId}
+      /users/{uid}/documents/{docId}/chunks/{n}   file bytes, in pieces
+*/
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Everything a student owns lives under their own uid, and the recursive
+    // wildcard covers the sub-collections (notes, tasks, documents, chunks)
+    // without needing a separate rule for each one.
+    match /users/{uid}/{document=**} {
+      allow read, write: if request.auth != null && request.auth.uid == uid;
+    }
+
+    // Anything not matched above is denied. Explicit, so it stays true as the
+    // app grows rather than depending on what is absent.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

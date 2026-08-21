@@ -18,6 +18,7 @@ mid-lesson, which matters more here than perfect real-time consistency.
 from __future__ import annotations
 
 import json
+from datetime import datetime
 import threading
 import urllib.error
 import urllib.parse
@@ -30,6 +31,9 @@ BASE = ("https://firestore.googleapis.com/v1/projects/{project}"
 
 _ctx = threading.local()
 _last_error = ""
+_ok = 0
+_failed = 0
+_last_ok_at = ""
 
 
 def set_token(token: str) -> None:
@@ -49,8 +53,25 @@ def enabled() -> bool:
 
 
 def status() -> dict:
-    return {"enabled": enabled(), "project": project(),
-            "connected": bool(token()) and enabled(), "last_error": _last_error}
+    """Whether the cloud copy is actually working — not merely switched on.
+
+    The counters matter as much as the flags. Every sync failure used to be
+    swallowed silently, so a student whose writes were all being rejected saw
+    exactly what a student with a perfect backup saw: nothing. Then they signed
+    in on another machine and it was empty. Counting successes and failures
+    turns that silence into something the app can show and act on.
+    """
+    healthy = _ok > 0 and _failed == 0
+    return {
+        "enabled": enabled(),
+        "project": project(),
+        "connected": bool(token()) and enabled(),
+        "saved": _ok,
+        "failed": _failed,
+        "healthy": healthy,
+        "last_error": _last_error,
+        "last_saved_at": _last_ok_at,
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -122,15 +143,21 @@ def _call(method: str, path: str, payload: dict | None = None,
     try:
         with net.urlopen(req, timeout=25) as resp:
             body = resp.read().decode("utf-8")
+        global _ok, _last_ok_at
         _last_error = ""
+        _ok += 1
+        _last_ok_at = datetime.now().isoformat(timespec="seconds")
         return json.loads(body) if body.strip() else {}
     except urllib.error.HTTPError as exc:
         detail = exc.read()[:200].decode("utf-8", "replace")
         if exc.code == 404 and method == "GET":
             return None                       # simply not there yet
+        global _failed
+        _failed += 1
         _last_error = f"HTTP {exc.code} {detail}"
         return None
     except (urllib.error.URLError, OSError, ValueError) as exc:
+        _failed += 1
         _last_error = f"{type(exc).__name__}: {exc}"
         return None
 

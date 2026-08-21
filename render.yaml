@@ -12,11 +12,16 @@ services:
     plan: free
     # Standard library only — there is genuinely nothing to install. The upgrade
     # keeps pip itself current so the build step does not warn.
-    buildCommand: "python -m pip install --upgrade pip"
+    # Nothing to install — the server is standard library only. But the
+    # build step still needs requirements.txt to exist for Render to
+    # recognise a Python project at all.
+    buildCommand: "pip install -r requirements.txt"
     # EVIE_NO_RELOAD: the file-watcher that restarts on code changes is for
     # local development. On a host the code never changes under the process, and
     # a watcher would just burn a worker.
-    startCommand: "EVIE_NO_RELOAD=1 python run.py"
+    # EVIE_NO_RELOAD is set in envVars below rather than inlined here, so
+    # nothing depends on how the platform parses the command string.
+    startCommand: "python run.py"
     healthCheckPath: /
     envVars:
       # --- you set these in the Render dashboard, marked sync:false so they

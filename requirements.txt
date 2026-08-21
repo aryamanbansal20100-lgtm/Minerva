@@ -1,0 +1,10 @@
+# Minerva's server uses the Python standard library and nothing else.
+#
+# This file is deliberately empty of packages. It exists because hosting
+# platforms look for it to recognise a Python project and pick a Python
+# runtime — without it, Render's build step has nothing to identify and the
+# deploy fails before it ever runs the app.
+#
+# Everything the server needs is built in: http.server, sqlite3, urllib,
+# zipfile, ssl, json. That is why it starts on a clean machine with one
+# command and there is nothing to install or keep updated.

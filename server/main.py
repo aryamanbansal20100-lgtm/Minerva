@@ -597,6 +597,14 @@ class Handler(SimpleHTTPRequestHandler):
             sync.delete_document(payload.get("id", ""))
             return self._json({"ok": store.delete_document(payload.get("id", ""))})
 
+        if path == "/api/backup/now":
+            # A deliberate, blocking upload of everything on this device.
+            # The ordinary pushes are fire-and-forget and were failing silently
+            # while Firestore denied writes, so publishing the rules afterwards
+            # left a term of notes still only on the laptop. This is the button
+            # that actually gets them to the cloud.
+            return self._json(sync.push_all())
+
         if path == "/api/backup/test":
             """Write a probe document, read it back, delete it.
 

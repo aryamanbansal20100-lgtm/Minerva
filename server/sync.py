@@ -12,6 +12,7 @@ school, where the network is the least reliable component.
 
 from __future__ import annotations
 
+import pathlib
 import threading
 
 from . import cloud, store
@@ -148,3 +149,98 @@ def pull_if_new() -> dict:
         restored += 1
     return {"pulled": True, "notes": len(notes), "tasks": len(tasks),
             "documents": restored}
+
+
+def push_all() -> dict:
+    """Upload everything on this device, synchronously, reporting failures.
+
+    The ordinary pushes are fire-and-forget: they happen in a thread when a note
+    is saved, and a failure is swallowed so a sync problem can never lose a
+    local write. That is right for the steady state and useless for recovery —
+    when Firestore was rejecting writes (the rules ship denying everything until
+    they are published), every push failed silently and the cloud stayed empty.
+    Publishing the rules afterwards does not go back and upload a term of notes.
+
+    So: a deliberate, blocking, one-off upload of everything, which counts what
+    it managed and says what went wrong. This is what makes a laptop's worth of
+    work appear on another device.
+    """
+    uid = store.uid()
+    if uid in ("local", "nobody"):
+        return {"ok": False, "message": "Sign in with Google first."}
+    if not cloud.enabled():
+        return {"ok": False, "message": "Cloud backup is switched off."}
+    if not cloud.token():
+        return {"ok": False, "message": "Sign in with Google first."}
+
+    done = {"profile": 0, "notes": 0, "tasks": 0, "documents": 0}
+    failed = []
+
+    if cloud.put_profile(uid, store.get_profile()):
+        done["profile"] = 1
+    else:
+        failed.append("profile")
+
+    for n in store.notes(limit=1000):
+        full = store.get_note(n["id"]) or n
+        row = {
+            "id": full["id"], "title": full.get("title", ""),
+            "body": full.get("body", ""), "blocks": full.get("blocks", []),
+            "transcript": full.get("transcript", ""),
+            "subject": full.get("subject", ""), "topic": full.get("topic", ""),
+            "continues": bool(full.get("continues")),
+            "created_at": full.get("created_at", ""),
+            "updated_at": full.get("updated_at", ""),
+        }
+        if cloud.put(uid, "notes", full["id"], row):
+            done["notes"] += 1
+        else:
+            failed.append("note:" + (full.get("title") or full["id"])[:30])
+
+    for task in store.tasks(open_only=False):
+        trow = {
+            "id": task["id"], "title": task.get("title", ""),
+            "subject": task.get("subject", ""), "kind": task.get("kind", ""),
+            "due": task.get("due") or "", "done": bool(task.get("done")),
+            "source": task.get("source", ""), "url": task.get("url", ""),
+            "note_id": task.get("note_id") or "",
+            "updated_at": task.get("updated_at", ""),
+        }
+        if cloud.put(uid, "tasks", task["id"], trow):
+            done["tasks"] += 1
+        else:
+            failed.append("task:" + (task.get("title") or task["id"])[:30])
+
+    for d in store.documents():
+        row = store.get_document(d["id"]) or d
+        blob = b""
+        try:
+            path = row.get("path")
+            if path:
+                blob = pathlib.Path(path).read_bytes()
+        except OSError:
+            blob = b""
+        meta = {k: v for k, v in row.items() if k != "path"}
+        if cloud.put(uid, "documents", row["id"], meta):
+            done["documents"] += 1
+            if blob:
+                cloud.upload_file(uid, row["id"], row.get("name", "file"),
+                                  row.get("mime", ""), blob)
+        else:
+            failed.append("doc:" + (row.get("name") or row["id"])[:30])
+
+    ok = not failed
+    total = done["notes"] + done["tasks"] + done["documents"]
+    if ok:
+        message = (f"Backed up {done['notes']} notes, {done['tasks']} tasks and "
+                   f"{done['documents']} documents. Sign in anywhere and they "
+                   "will be there.")
+    elif total:
+        message = (f"Backed up {total} things, but {len(failed)} failed. "
+                   + (cloud.status().get("last_error") or ""))
+    else:
+        message = ("Nothing could be saved. "
+                   + (cloud.status().get("last_error")
+                      or "Firestore refused every write — check the rules were "
+                         "published to Firestore, not Realtime Database."))
+    return {"ok": ok, "done": done, "failed": failed[:8], "message": message}

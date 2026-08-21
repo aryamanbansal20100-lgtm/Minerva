@@ -268,6 +268,25 @@ export function SettingsPage({ state, refresh }: SettingsPageProps) {
       setProbing(false);
     }
   }, []);
+
+  /* Publishing the Firestore rules does not go back and upload the notes that
+     failed to save while every write was being denied. This does: a deliberate,
+     one-off upload of everything already on this device. */
+  const backupNow = useCallback(async () => {
+    setProbing(true);
+    setProbe(null);
+    try {
+      const out = await apiPost<{ ok: boolean; message: string }>(
+        "/api/backup/now", {},
+      );
+      setProbe(out);
+      apiGet<BackupState>("/api/backup").then(setBackup).catch(() => {});
+    } catch (err) {
+      setProbe({ ok: false, message: err instanceof Error ? err.message : String(err) });
+    } finally {
+      setProbing(false);
+    }
+  }, []);
   useEffect(() => {
     let live = true;
     apiGet<BackupState>("/api/backup")
@@ -736,9 +755,17 @@ export function SettingsPage({ state, refresh }: SettingsPageProps) {
               type="button"
               onClick={testBackup}
               disabled={probing}
-              className="btn-brand rounded-lg px-3 py-1.5 text-[13px] font-semibold disabled:opacity-60"
+              className="rounded-lg border px-3 py-1.5 text-[13px] text-muted-foreground transition-colors hover:bg-muted disabled:opacity-60"
             >
               {probing ? "Testing…" : "Test cloud backup"}
+            </button>
+            <button
+              type="button"
+              onClick={backupNow}
+              disabled={probing}
+              className="btn-brand rounded-lg px-3 py-1.5 text-[13px] font-semibold disabled:opacity-60"
+            >
+              {probing ? "Uploading…" : "Back up everything now"}
             </button>
             {probe ? (
               <span className={cn("text-[12.5px]", probe.ok ? "text-ok" : "text-late")}>

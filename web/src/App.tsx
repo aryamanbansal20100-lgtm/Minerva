@@ -13,6 +13,7 @@ import { SettingsPage } from "@/pages/SettingsPage"
 import AssessmentsPage from "@/pages/AssessmentsPage"
 import PracticePage from "@/pages/PracticePage"
 import StudyNudge from "@/components/StudyNudge"
+import AskDock from "@/components/AskDock"
 
 /* The shell: a fixed sidebar and a scrolling pane, with the student's identity
    at the top — never the app's name. Routing is by hash, so there is no extra
@@ -349,6 +350,13 @@ export default function App() {
         )}
         {route.name === "settings" && <SettingsPage state={state as never} refresh={refresh} />}
       </main>
+
+      {/* Ask sits above every screen: a question happens while you are reading
+          a note, not on a separate page you have to go and find. */}
+      <AskDock
+        noteId={route.name === "note" ? route.id : undefined}
+        onOpenNote={(nid) => go("#/note/" + nid)}
+      />
     </div>
   )
 }

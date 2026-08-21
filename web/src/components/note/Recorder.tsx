@@ -34,15 +34,34 @@ import { cn } from "@/lib/utils"
 const CHUNK_MS = 90 * 1000
 const FIRST_CHUNK_MS = 8 * 1000
 const TICK_MS = 100
-const BITRATE = 64000
+const BITRATE = 128000   // 64k was audibly thin; words matter here
 
+/* What to switch off, and what NOT to.
+
+   noiseSuppression and echoCancellation are tuned for one person holding a
+   phone to their face. In a room they treat a student answering six metres
+   away as noise and delete them, so both stay off.
+
+   autoGainControl is the opposite case and I had it wrong. A teacher across a
+   classroom arrives at the microphone very quiet; AGC is what lifts them to a
+   usable level. Turning it off left the audio so faint that Whisper was
+   guessing at syllables — which is where "Scarra Svati" comes from. It goes
+   back on, and a software gain stage below adds more on top. */
 const CLASS_AUDIO: MediaTrackConstraints = {
   echoCancellation: false,
   noiseSuppression: false,
-  autoGainControl: false,
+  autoGainControl: true,
   channelCount: 1,
   sampleRate: 48000,
 }
+
+/* Extra gain applied in software, after the browser's own.
+
+   A laptop microphone pointed at a whiteboard six metres away produces a
+   signal far below what a speech model expects. Multiplying it here costs
+   nothing and is the difference between a transcript and a guess. A limiter
+   sits after it so a sudden loud voice cannot clip. */
+const MIC_GAIN = 3.5
 
 type FinishOut = {
   empty?: boolean
@@ -102,6 +121,10 @@ type Machine = {
   ctx: AudioContext | null
   an: AnalyserNode | null
   buf: Uint8Array<ArrayBuffer> | null
+  /* The amplified stream that is actually recorded, and the node chain that
+     produces it. Kept so they can be torn down with everything else. */
+  recStream: MediaStream | null
+  gain: GainNode | null
   parts: Blob[]
   idx: number
   busy: number
@@ -113,6 +136,7 @@ type Machine = {
 
 const fresh = (): Machine => ({
   id: null, rec: null, stream: null, ctx: null, an: null, buf: null,
+  recStream: null, gain: null,
   parts: [], idx: 0, busy: 0, t0: 0, roll: null, tick: null, mime: "",
 })
 
@@ -227,7 +251,7 @@ export default function Recorder({ noteId, onError, onFinished, onTranscript }: 
         MediaRecorder.isTypeSupported(t),
       ) || ""
     m.parts = []
-    m.rec = new MediaRecorder(m.stream!, {
+    m.rec = new MediaRecorder(m.recStream || m.stream!, {
       ...(m.mime ? { mimeType: m.mime } : {}),
       audioBitsPerSecond: BITRATE,
     })
@@ -274,12 +298,36 @@ export default function Recorder({ noteId, onError, onFinished, onTranscript }: 
     m.t0 = Date.now()
     transcript.current = ""
     onTranscript?.("", true)
+    /* mic -> gain -> limiter -> (analyser, recorder)
+
+       The recorder is fed the AMPLIFIED stream, not the raw microphone, so the
+       loudness the meter shows is the loudness Whisper receives. The compressor
+       is there purely as a safety net: it only acts on peaks, so lifting a
+       distant teacher cannot make a nearby cough clip. */
     const AC = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext
     m.ctx = new AC()
+    const source = m.ctx.createMediaStreamSource(m.stream!)
+
+    m.gain = m.ctx.createGain()
+    m.gain.gain.value = MIC_GAIN
+
+    const limiter = m.ctx.createDynamicsCompressor()
+    limiter.threshold.value = -6
+    limiter.knee.value = 0
+    limiter.ratio.value = 12
+    limiter.attack.value = 0.003
+    limiter.release.value = 0.15
+
+    const sink = m.ctx.createMediaStreamDestination()
+    source.connect(m.gain)
+    m.gain.connect(limiter)
+    limiter.connect(sink)
+
     m.an = m.ctx.createAnalyser()
     m.an.fftSize = 1024
-    m.ctx.createMediaStreamSource(m.stream!).connect(m.an)
+    limiter.connect(m.an)          // meter what is actually being recorded
     m.buf = new Uint8Array(new ArrayBuffer(m.an.fftSize))
+    m.recStream = sink.stream
     spin()
     m.roll = setTimeout(() => {
       cut(false)
@@ -305,7 +353,10 @@ export default function Recorder({ noteId, onError, onFinished, onTranscript }: 
     cut(true)
     m.stream?.getTracks().forEach((t) => t.stop())
     m.ctx?.close().catch(() => {})
+    m.recStream?.getTracks().forEach((track) => track.stop())
     m.stream = null
+    m.recStream = null
+    m.gain = null
     m.ctx = null
     m.an = null
     setCaption("Writing your notes…")

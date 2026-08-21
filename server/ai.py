@@ -268,6 +268,18 @@ Rules:
   and prefix it with "> " so it survives as a quote.
 - "tasks" only when something was actually set. TODAY IS {today}. Teachers say
   "due Monday the 17th" with no year — resolve against today and never return a past date.
+- CAPTURE THE QUESTION ITSELF, WORD FOR WORD. When a teacher sets an essay or a
+  structured question, the wording IS the task and paraphrasing loses the marks:
+  record it as it was said, including the mark allocation.
+      "Using real-world examples, discuss the effectiveness of imposing a price
+       ceiling on essential goods (15 marks)"
+  not "economics essay". A task carrying a mark count in brackets — (15m),
+  [10 marks], "out of 8" — is always worth capturing, even when no due date is
+  given: an undated task is still a task, so return it with "due": null rather
+  than dropping it.
+- Phrases that mean work was set, and must produce a task: "for homework",
+  "your task is", "I want you to", "write me", "attempt", "hand this in",
+  "do this for next class", "practise these", "complete", "submit".
 - "assessed" for anything flagged as exam-relevant or coursework-relevant.
 - "confusing" for places the recording is garbled or the explanation was cut off.
 - Speech-to-text is imperfect. If a slice is inaudible or off-topic, return empty arrays.
@@ -374,8 +386,17 @@ Rules that matter:
 - Keep every number, formula, date and name exactly as recorded.
 - Include ONE or TWO diagrams, and only where a diagram genuinely helps —
   a process, a comparison, a hierarchy, a cycle. Never diagram a list.
-- "gaps" is what to ask the teacher next lesson: unfinished threads,
-  contradictions, or places the recording was clearly garbled. Be specific.
+- "gaps" is what to ask the TEACHER next lesson — real questions about the
+  subject, the kind a good student writes in the margin. For example: "does
+  this formula still hold when the collision is inelastic?", "which of these
+  two methods is expected in Paper 1?".
+  NEVER ask about the transcript itself. A misheard word is a microphone
+  problem, not a doubt: do not write "clarify the meaning of 'Scarra Svati'",
+  do not ask to confirm a name or figure that simply came through garbled, and
+  do not ask the student to check the wording of the recording. If a passage is
+  unintelligible, leave it out silently — the student cannot ask their teacher
+  what your speech model failed to hear.
+  If there is no genuine subject question worth asking, return an empty list.
 - Everything must come from the input — never invent material. But do not
   discard input either: if it was said, it belongs in the note.
 - The recording may mix Hindi and English. Write the finished note in English,
@@ -1112,8 +1133,10 @@ Rules:
   elasticity needs five graphs, each in its own section, not one summary.
 - Otherwise use flow for a process, compare for two things side by side,
   hierarchy for a tree, cycle for a loop, timeline for dates.
-- If something is garbled or was cut off, put it in a "gaps" block rather than
-  quietly inventing the missing half.
+- If something is garbled or was cut off, leave it out rather than inventing
+  the missing half — and do NOT turn it into a question. "gaps" is for real
+  subject doubts to raise with the teacher, never for words the microphone
+  failed to catch.
 - Never add material that is not in the input.
 - Write for {curriculum} at {grade} level, using that syllabus's command terms.
 

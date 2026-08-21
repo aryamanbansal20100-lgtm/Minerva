@@ -829,3 +829,65 @@ def assessments(days_ahead: int = 60) -> list[dict]:
             "AND substr(COALESCE(due, starts), 1, 10) <= ? "
             "ORDER BY COALESCE(due, starts)", (today, horizon))]
     return rows
+
+
+def past_assessments(days_back: int = 60, limit: int = 12) -> list[dict]:
+    """Assessments that have already happened, newest first.
+
+    Worth showing rather than hiding. A term's formatives are the best possible
+    revision material for the next one, and a page that goes blank the day after
+    a test looks broken — which is exactly what happened: four real FAs sat in
+    the database and the screen said "connect ManageBac".
+    """
+    init()
+    today = datetime.now().strftime("%Y-%m-%d")
+    floor = (datetime.now() - timedelta(days=days_back)).strftime("%Y-%m-%d")
+    with connect() as c:
+        return [dict(r) for r in c.execute(
+            "SELECT * FROM feed_items WHERE kind='exam' "
+            "AND COALESCE(due, starts) IS NOT NULL "
+            "AND substr(COALESCE(due, starts), 1, 10) < ? "
+            "AND substr(COALESCE(due, starts), 1, 10) >= ? "
+            "ORDER BY COALESCE(due, starts) DESC LIMIT ?",
+            (today, floor, limit))]
+
+
+def add_assessment(title: str, subject: str = "", when: str = "",
+                   detail: str = "", kind: str = "exam") -> dict:
+    """Record an FA or test the student was told about in class.
+
+    ManageBac's calendar feed carries assignments and events. It does NOT carry
+    the class Discussions tab, which is where many teachers actually announce
+    the week's formative — so those assessments are invisible to any calendar
+    import, however well it works. This is the way in for them.
+
+    Stored in the same table as the imported ones so it sorts, bands and
+    practises identically; only the uid prefix marks it as hand-entered.
+    """
+    init()
+    title = (title or "").strip()
+    if not title:
+        raise ValueError("give the assessment a name")
+    if not (when or "").strip():
+        raise ValueError("give the date it is on")
+    uid = "manual-" + rid()
+    stamp = now()
+    with connect() as c:
+        c.execute("INSERT INTO feed_items VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                  (uid, kind, title, (subject or "").strip(),
+                   (detail or "").strip(), when, when, "", "manual",
+                   stamp, stamp, 1, 0))
+    return {"uid": uid, "title": title, "subject": subject, "when": when,
+            "kind": kind}
+
+
+def delete_assessment(uid: str) -> bool:
+    """Remove an assessment. Hand-entered ones only — an imported one would
+    simply come back on the next ManageBac refresh, so deleting it would look
+    broken rather than helpful."""
+    init()
+    if not str(uid).startswith("manual-"):
+        raise ValueError("that one comes from ManageBac — it cannot be deleted here")
+    with connect() as c:
+        cur = c.execute("DELETE FROM feed_items WHERE uid=?", (uid,))
+    return cur.rowcount > 0

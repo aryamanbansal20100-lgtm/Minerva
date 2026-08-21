@@ -560,6 +560,23 @@ class Handler(SimpleHTTPRequestHandler):
             sync.delete_document(payload.get("id", ""))
             return self._json({"ok": store.delete_document(payload.get("id", ""))})
 
+        if path == "/api/assessment/add":
+            try:
+                row = store.add_assessment(
+                    payload.get("title", ""), payload.get("subject", ""),
+                    payload.get("when", ""), payload.get("detail", ""),
+                    payload.get("kind", "exam") or "exam")
+            except ValueError as exc:
+                return self._json({"error": str(exc)}, 400)
+            return self._json(row)
+
+        if path == "/api/assessment/delete":
+            try:
+                gone = store.delete_assessment(payload.get("uid", ""))
+            except ValueError as exc:
+                return self._json({"error": str(exc)}, 400)
+            return self._json({"deleted": gone})
+
         if path == "/api/notebook/rename":
             try:
                 out = store.rename_notebook(payload.get("old", ""),
@@ -916,34 +933,47 @@ class Handler(SimpleHTTPRequestHandler):
         several days of revision before it, and burying the two in one list is
         how a test creeps up on you.
         """
-        rows = store.assessments()
         profile = store.get_profile()
-        out = []
-        for r in rows:
+        rows = store.assessments()
+        past_rows = store.past_assessments()
+
+        def shape(r: dict, gone: bool) -> dict:
             when = r.get("due") or r.get("starts")
-            days = managebac.days_until(when)
             subject = r.get("subject") or ""
-            # What you would actually revise from: your own notes in that subject.
             notes = [n for n in store.notes(limit=200)
                      if (n.get("subject") or "").lower() == subject.lower()][:6]
-            out.append({
+            return {
                 "uid": r["uid"],
                 "title": r.get("title") or "",
                 "subject": subject,
                 "detail": (r.get("detail") or "")[:400],
                 "when": when,
-                "days": days,
-                "band": managebac.band_for(when,
-                                           timetabled=bool(r.get("timetabled"))),
+                "days": managebac.days_until(when),
+                "band": "past" if gone else managebac.band_for(
+                    when, timetabled=bool(r.get("timetabled"))),
                 "url": r.get("url") or "",
                 "revise_from": [{"id": n["id"], "title": n.get("title") or "Untitled",
                                  "topic": n.get("topic") or ""} for n in notes],
                 "can_practise": bool(notes),
-            })
-        return {"assessments": out,
-                "count": len(out),
-                "next": out[0] if out else None,
-                "subjects": profile.get("subjects") or []}
+            }
+
+        out = []
+        for r in rows:
+            out.append(shape(r, gone=False))
+
+        return {
+            "assessments": out,
+            "past": [shape(r, gone=True) for r in past_rows],
+            "count": len(out),
+            "next": out[0] if out else None,
+            "subjects": profile.get("subjects") or [],
+            # Whether ManageBac is connected is NOT the same question as whether
+            # anything is coming up. Without this the page showed "connect
+            # ManageBac" to a student whose feed was connected and full — the
+            # term's assessments had simply all been sat already.
+            "configured": bool(profile.get("managebac_ics")),
+            "total_known": len(out) + len(past_rows),
+        }
 
     def _practice(self, payload) -> None:
         """Exam-style practice questions generated from the student's own notes."""

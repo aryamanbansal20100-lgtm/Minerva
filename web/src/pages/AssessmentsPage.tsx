@@ -24,6 +24,7 @@ import { api } from "@/lib/api"
 import { cn } from "@/lib/utils"
 import { StatRow, type Stat } from "@/components/StatRow"
 import { inlineNodes, type InlineNode } from "@/lib/mathText"
+import { hueFor } from "@/pages/DuePage"
 
 /* ------------------------------------------------------------------ shapes */
 
@@ -59,9 +60,18 @@ export type Assessment = {
 
 type AssessmentsResponse = {
   assessments: Assessment[]
+  /** Assessments already sat. Kept because a term's formatives are the best
+      revision material for the next one — and because a page that empties the
+      day after a test looks broken. */
+  past?: Assessment[]
   count: number
   next: Assessment | null
   subjects: string[]
+  /** Whether the ManageBac calendar is connected. Emphatically NOT the same
+      question as whether anything is coming up: four real FAs sat in the
+      database while this page told the student to go and connect ManageBac. */
+  configured?: boolean
+  total_known?: number
 }
 
 export type PracticeQuestion = {
@@ -631,6 +641,13 @@ export function AssessmentsPage({
   onPractise,
 }: AssessmentsPageProps) {
   const [data, setData] = useState<AssessmentsResponse | null>(null)
+  /* Hand-entered assessments. ManageBac's calendar cannot see the Discussions
+     tab, which is where many teachers announce the week's formative, so there
+     has to be a way in for those. */
+  const [adding, setAdding] = useState(false)
+  const [draft, setDraft] = useState({ title: "", subject: "", when: "" })
+  const [saving, setSaving] = useState(false)
+  const [addError, setAddError] = useState("")
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
 
@@ -653,6 +670,32 @@ export function AssessmentsPage({
       setLoading(false)
     }
   }, [])
+
+  const saveAssessment = useCallback(async () => {
+    const title = draft.title.trim()
+    const when = draft.when.trim()
+    if (!title || !when) {
+      setAddError("give it a name and the date it is on")
+      return
+    }
+    setSaving(true)
+    setAddError("")
+    try {
+      await api.post("/api/assessment/add", {
+        title,
+        subject: draft.subject.trim(),
+        when,
+      })
+      setDraft({ title: "", subject: "", when: "" })
+      setAdding(false)
+      await load()
+    } catch (err) {
+      setAddError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setSaving(false)
+    }
+  }, [draft, load])
+
 
   useEffect(() => {
     void load()
@@ -776,6 +819,73 @@ export function AssessmentsPage({
         </div>
       ) : null}
 
+      {/* Add an FA by hand.
+
+          ManageBac's calendar feed carries assignments and events but not the
+          class Discussions tab, which is where many teachers actually announce
+          the week's formative. Without this there is no route for those onto
+          the page at all. Stored alongside the imported ones, so it bands,
+          sorts and practises identically. */}
+      {adding ? (
+        <section className="mb-5 rounded-[10px] border bg-card px-5 py-4">
+          <h2 className="text-[14px] font-semibold">Add an FA or test</h2>
+          <p className="mt-1 text-[12.5px] text-muted-foreground">
+            For the ones announced in class or in the Discussions tab, which the
+            ManageBac calendar never sends.
+          </p>
+          <div className="mt-3 grid gap-2 sm:grid-cols-[1.6fr_1fr_1fr]">
+            <input
+              autoFocus
+              value={draft.title}
+              onChange={(e) => setDraft({ ...draft, title: e.target.value })}
+              placeholder="What is it? e.g. Economics FA 3"
+              className="rounded-md border bg-background px-2.5 py-1.5 text-[13px] outline-none focus:border-brand"
+            />
+            <input
+              value={draft.subject}
+              onChange={(e) => setDraft({ ...draft, subject: e.target.value })}
+              placeholder="Subject"
+              list="minerva-subjects"
+              className="rounded-md border bg-background px-2.5 py-1.5 text-[13px] outline-none focus:border-brand"
+            />
+            <datalist id="minerva-subjects">
+              {(data?.subjects || []).map((s) => (
+                <option key={s} value={s} />
+              ))}
+            </datalist>
+            <input
+              type="date"
+              value={draft.when}
+              onChange={(e) => setDraft({ ...draft, when: e.target.value })}
+              className="rounded-md border bg-background px-2.5 py-1.5 text-[13px] outline-none focus:border-brand"
+            />
+          </div>
+          {addError ? (
+            <p className="mt-2 text-[12.5px] text-late">{addError}</p>
+          ) : null}
+          <div className="mt-3 flex gap-2">
+            <button
+              type="button"
+              disabled={saving}
+              onClick={saveAssessment}
+              className={cn(BTN_HERO, "disabled:opacity-60")}
+            >
+              {saving ? "Saving…" : "Add it"}
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setAdding(false)
+                setAddError("")
+              }}
+              className="rounded-md border px-3 py-1.5 text-[13px] text-muted-foreground transition-colors hover:bg-muted"
+            >
+              Cancel
+            </button>
+          </div>
+        </section>
+      ) : null}
+
       {loading ? (
         <p className="text-[13px] text-muted-foreground">Looking at your calendar…</p>
       ) : rows.length === 0 && !error ? (
@@ -790,24 +900,52 @@ export function AssessmentsPage({
             </span>
             <div className="min-w-0">
               <h2 className="text-[15px] font-semibold">
-                No tests on the horizon — enjoy it while it lasts.
+                {data?.configured
+                  ? "Nothing coming up on your ManageBac calendar."
+                  : "No tests on the horizon — enjoy it while it lasts."}
               </h2>
               <p className="mt-1 max-w-[46rem] text-[13px] leading-relaxed text-muted-foreground">
-                Formatives, summatives and tests land on this page by themselves
-                once your ManageBac calendar is connected, with the notes to
-                revise from already attached. You never have to type one in.
+                {data?.configured ? (
+                  <>
+                    ManageBac is connected
+                    {data.total_known
+                      ? ` and ${data.total_known} assessment${data.total_known === 1 ? " has" : "s have"} come through` 
+                      : ""}
+                    . Its calendar carries assignments and events, but not the
+                    class <b>Discussions</b> tab — so an FA your teacher
+                    announced there will never appear here on its own. Add it
+                    below and it behaves exactly like an imported one.
+                  </>
+                ) : (
+                  <>
+                    Formatives, summatives and tests land on this page by
+                    themselves once your ManageBac calendar is connected, with
+                    the notes to revise from already attached.
+                  </>
+                )}
               </p>
-              <button
-                type="button"
-                className={cn(BTN_HERO, "mt-3.5")}
-                onClick={() => {
-                  if (onOpenSettings) onOpenSettings()
-                  else window.location.hash = "#/settings"
-                }}
-              >
-                <IconGear />
-                Connect ManageBac in Settings
-              </button>
+              <div className="mt-3.5 flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  className={cn(BTN_HERO)}
+                  onClick={() => setAdding(true)}
+                >
+                  Add an FA or test
+                </button>
+                {!data?.configured && (
+                  <button
+                    type="button"
+                    className={cn(BTN_HERO)}
+                    onClick={() => {
+                      if (onOpenSettings) onOpenSettings()
+                      else window.location.hash = "#/settings"
+                    }}
+                  >
+                    <IconGear />
+                    Connect ManageBac in Settings
+                  </button>
+                )}
+              </div>
             </div>
           </div>
         </section>
@@ -965,6 +1103,53 @@ export function AssessmentsPage({
           </div>
         </>
       )}
+
+      {/* Already sat. Worth keeping on screen: last term's formatives are the
+          best possible practice for the next one — and a page that empties the
+          day after a test looks broken. */}
+      {!loading && (data?.past || []).length > 0 ? (
+        <section className="mt-8">
+          <div className="mb-2 flex items-center justify-between">
+            <h2 className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+              Already sat
+            </h2>
+            <span className="font-mono text-[11px] tabular-nums text-muted-foreground">
+              {(data?.past || []).length}
+            </span>
+          </div>
+          <ul className="space-y-1.5">
+            {(data?.past || []).map((a) => (
+              <li
+                key={a.uid}
+                className="flex items-center gap-3 rounded-[10px] border bg-card px-4 py-2.5"
+              >
+                <span
+                  className="h-2 w-2 shrink-0 rounded-full"
+                  style={{ background: hueFor(a.subject) }}
+                />
+                <span className="min-w-0 flex-1 truncate text-[13.5px]">{a.title}</span>
+                <span className="shrink-0 font-mono text-[11.5px] tabular-nums text-muted-foreground">
+                  {(a.when || "").slice(0, 10)}
+                </span>
+                {a.can_practise ? (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      onPractise
+                        ? onPractise({ subject: a.subject })
+                        : (window.location.hash =
+                            "#/practice/" + encodeURIComponent(a.subject))
+                    }
+                    className="shrink-0 rounded-md border px-2.5 py-1 text-[12px] text-muted-foreground transition-colors hover:border-brand hover:text-brand"
+                  >
+                    Practise
+                  </button>
+                ) : null}
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
     </div>
   )
 }

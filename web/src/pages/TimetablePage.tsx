@@ -397,7 +397,7 @@ export function TimetablePage() {
                 key={day}
                 style={{ animationDelay: `${Math.min(index, 4) * 0.04}s` }}
                 className={cn(
-                  "evie-rise overflow-hidden rounded-lg border bg-card",
+                  "minerva-rise overflow-hidden rounded-lg border bg-card",
                   "shadow-[0_1px_2px_rgba(20,20,26,0.04)]",
                   "transition-[transform,box-shadow] duration-[140ms] ease-out",
                   "hover:-translate-y-0.5",

@@ -433,12 +433,12 @@ export default function NotificationsPage({
           <SourceSection
             source="email"
             total={totals.email}
-            caption="Read-only. Evie cannot send, reply to or delete anything."
+            caption="Read-only. Minerva cannot send, reply to or delete anything."
           >
             {data.email.connected ? (
               <Callout tone="ok" title={`Reading ${data.email.address}`}>
                 <p>
-                  Read-only. Evie cannot send, reply to or delete anything, and
+                  Read-only. Minerva cannot send, reply to or delete anything, and
                   you can revoke this at any time from your Google account.
                 </p>
                 <p>
@@ -469,7 +469,7 @@ export default function NotificationsPage({
                 {connectError && <p className="text-late">{connectError}</p>}
                 {!data.email.error && !connectError && (
                   <p>
-                    Sign in with your school Google account and Evie can show
+                    Sign in with your school Google account and Minerva can show
                     school mail here alongside ManageBac.{" "}
                     <span className="text-foreground">
                       No password is stored

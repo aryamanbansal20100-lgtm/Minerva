@@ -1,5 +1,5 @@
 /* ==========================================================================
-   app.js — Evie.
+   app.js — Minerva.
 
    The recording model, because it is the heart of the app:
 
@@ -72,7 +72,7 @@ const api = {
     const dropped = last instanceof TypeError ||
                     /failed to fetch|network|load failed/i.test(last.message || '');
     throw new Error(dropped
-      ? 'lost the connection to Evie. Nothing was lost — check it is still running, then try again.'
+      ? 'lost the connection to Minerva. Nothing was lost — check it is still running, then try again.'
       : last.message);
   },
 };
@@ -95,17 +95,17 @@ function toast(msg, bad = false, hold = 0) {
 /* ========================================================================= */
 /* Show whose notes these are.
 
-   The sidebar showed "Evie" — the app's own name, in the corner of its own
+   The sidebar showed "Minerva" — the app's own name, in the corner of its own
    window, which tells the student nothing. With two Google accounts in play it
    actively hid the thing that mattered: which account they were signed into.
    Show the student's photo, name and email instead. */
 function showIdentity() {
-  const u = window.Evie && window.Evie.auth && window.Evie.auth.user;
+  const u = window.Minerva && window.Minerva.auth && window.Minerva.auth.user;
   const name = $('#who-name'), mail = $('#who');
   const img = $('#avatar'), initial = $('#initial');
   if (!name) return;
   if (!u) {
-    name.textContent = 'Evie';
+    name.textContent = 'Minerva';
     if (mail) mail.textContent = '—';
     return;
   }
@@ -776,7 +776,7 @@ function toObsidian(note) {
   if (n.subject) out.push('subject: ' + JSON.stringify(String(n.subject)));
   if (n.topic) out.push('topic: ' + JSON.stringify(String(n.topic)));
   if (date) out.push('date: ' + date);
-  out.push('source: evie');
+  out.push('source: minerva');
   const tags = ['note'];
   if (n.subject) tags.push(mdTag(n.subject));
   if (n.topic) tags.push(mdTag(n.topic));
@@ -1308,7 +1308,7 @@ async function refreshMailState() {
   const el = $('#s-mail-state');
   if (!el) return;
   const off = $('#s-mail-forget');
-  const has = window.Evie && window.Evie.mail && window.Evie.mail.token();
+  const has = window.Minerva && window.Minerva.mail && window.Minerva.mail.token();
   if (!has) {
     el.className = 'mail-state';
     el.textContent = 'Not connected.';
@@ -1358,11 +1358,11 @@ function viewSettings() {
         <label>School email</label>
         <div id="s-mail-state" class="mail-state">Checking…</div>
         <div class="help">
-          Evie can show school mail beside your ManageBac work — assignments,
+          Minerva can show school mail beside your ManageBac work — assignments,
           replies and anything urgent, kept in separate lists.
           <br><b>No password is stored, ever.</b> You sign in with Google and it
           grants read-only access, which you can take back at any time from your
-          Google account. Evie cannot send, reply to or delete anything.
+          Google account. Minerva cannot send, reply to or delete anything.
         </div>
         <div style="display:flex;gap:8px;margin-top:9px;align-items:center">
           <button class="btn sm" id="s-mail-connect">Connect school email</button>
@@ -1403,32 +1403,32 @@ function viewSettings() {
   /* School email, wired here as well as in Notifications — Settings is where
      anyone looks for "connect an account", and a feature nobody can find is a
      feature that does not exist. */
-  /* Sign out. window.Evie.auth.signOut has existed since auth was added but
+  /* Sign out. window.Minerva.auth.signOut has existed since auth was added but
      was never wired to anything, so there was no way out of the account. */
   const who = $('#s-who');
-  const user = window.Evie && window.Evie.auth && window.Evie.auth.user;
+  const user = window.Minerva && window.Minerva.auth && window.Minerva.auth.user;
   if (who) who.textContent = user ? (user.email || user.displayName || 'Signed in')
                                   : 'Not signed in';
   $('#s-signout').onclick = async () => {
-    if (!confirm('Sign out of Evie on this device?')) return;
+    if (!confirm('Sign out of Minerva on this device?')) return;
     // Drop the school-mail token too — leaving it behind would hand the next
     // person at this laptop a live read handle on the inbox.
-    if (window.Evie.mail) window.Evie.mail.forget();
-    try { await window.Evie.auth.signOut(); }
+    if (window.Minerva.mail) window.Minerva.mail.forget();
+    try { await window.Minerva.auth.signOut(); }
     catch (e) { toast(e.message, true); }
   };
 
   refreshMailState();
   $('#s-mail-connect').onclick = async () => {
     const btn = $('#s-mail-connect');
-    if (!window.Evie || !window.Evie.mail) {
+    if (!window.Minerva || !window.Minerva.mail) {
       return toast('Sign in with Google first.', true);
     }
     btn.disabled = true;
     const was = btn.textContent;
     btn.textContent = 'Waiting for Google…';
     try {
-      const out = await window.Evie.mail.connect();
+      const out = await window.Minerva.mail.connect();
       if (out.cancelled) return;
       if (!out.ok) return toast(out.error || 'could not connect', true);
       toast('School email connected — read-only.');
@@ -1436,7 +1436,7 @@ function viewSettings() {
     } finally { btn.disabled = false; btn.textContent = was; }
   };
   $('#s-mail-forget').onclick = () => {
-    window.Evie.mail.forget();
+    window.Minerva.mail.forget();
     toast('Disconnected. Nothing was kept.');
     refreshMailState();
   };
@@ -1598,4 +1598,4 @@ function bindGlobal() {
 }
 
 // boot() is called by auth.js once Google sign-in succeeds.
-if (!window.Evie || !window.Evie.auth) boot();
+if (!window.Minerva || !window.Minerva.auth) boot();

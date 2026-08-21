@@ -39,7 +39,7 @@ def status() -> dict:
 
 
 def _multipart(fields: dict, filename: str, payload: bytes) -> tuple[bytes, str]:
-    boundary = "----evie" + uuid.uuid4().hex
+    boundary = "----minerva" + uuid.uuid4().hex
     ctype = mimetypes.guess_type(filename)[0] or "audio/webm"
     parts = bytearray()
     for key, value in fields.items():

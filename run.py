@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Evie — notes for students.
+"""Minerva — notes for students.
 
     python run.py
 
@@ -17,7 +17,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent
 sys.path.insert(0, str(ROOT))
 
-TEMPLATE = """# Evie. Copy of .env.example — keys live here, never in the browser.
+TEMPLATE = """# Minerva. Copy of .env.example — keys live here, never in the browser.
 
 # The one key that matters. Free, no card: https://console.groq.com/keys
 # Turns on BOTH the note-writing brain and the class transcription.

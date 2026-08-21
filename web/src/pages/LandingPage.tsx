@@ -169,7 +169,7 @@ function HeroDemo() {
       </div>
 
       <div className="grid gap-4 sm:grid-cols-[0.92fr_1.08fr]">
-        {/* what Evie hears */}
+        {/* what Minerva hears */}
         <div className="rounded-2xl border bg-card p-4 shadow-sm">
           <div className="flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.12em] text-muted-foreground">
             <span className={cn("h-2 w-2 rounded-full", phase === "done" ? "bg-muted-foreground/40" : "animate-pulse bg-late")} />
@@ -181,14 +181,14 @@ function HeroDemo() {
           </p>
         </div>
 
-        {/* what Evie writes */}
+        {/* what Minerva writes */}
         <div
           className={cn(
             "rounded-2xl border bg-card p-5 shadow-md transition-all duration-500",
             phase === "done" ? "opacity-100 translate-y-0" : "opacity-40 translate-y-2",
           )}
         >
-          <div className="font-mono text-[10px] uppercase tracking-[0.12em] text-brand">Evie · revision note</div>
+          <div className="font-mono text-[10px] uppercase tracking-[0.12em] text-brand">Minerva · revision note</div>
           <h3 className="mt-1.5 font-display text-[21px] font-semibold leading-tight text-foreground">{sample.title}</h3>
           <div className="my-3 h-px bg-border" />
           <ul className="flex flex-col gap-2.5">
@@ -212,18 +212,18 @@ function HeroDemo() {
 /* --------------------------------------------------------------- sections */
 
 const STEPS = [
-  { n: "01", t: "Press record", d: "One tap when the lesson starts — even with the lid half down. Evie hears the teacher across the room, in English or Hindi, and keeps up live." },
-  { n: "02", t: "Evie writes it up", d: "Press stop and you get structured notes: headings, the phrases you were told to write exactly, diagrams and graphs — and any homework, filed with its due date." },
-  { n: "03", t: "You just revise", d: "Every note lands in the right subject notebook, searchable, on every device. Ask Evie a question and it answers from your own notes." },
+  { n: "01", t: "Press record", d: "One tap when the lesson starts — even with the lid half down. Minerva hears the teacher across the room, in English or Hindi, and keeps up live." },
+  { n: "02", t: "Minerva writes it up", d: "Press stop and you get structured notes: headings, the phrases you were told to write exactly, diagrams and graphs — and any homework, filed with its due date." },
+  { n: "03", t: "You just revise", d: "Every note lands in the right subject notebook, searchable, on every device. Ask Minerva a question and it answers from your own notes." },
 ]
 
 const FEATURES = [
   { t: "Records the whole class", d: "Far-field audio tuned for a classroom, not a headset. It transcribes as it goes, so a dropped connection costs minutes, not the lesson." },
   { t: "Diagrams & graphs", d: "Supply curves, velocity–time graphs, flowcharts, mind maps — drawn automatically when the topic has a shape, placed in the right section." },
-  { t: "Turns your files into notes", d: "Drop in worksheets, slides, PDFs or a photo of the board. Evie reads them, groups what belongs together, and writes a proper note per topic." },
-  { t: "Timetable & reminders", d: "Snap a photo of your timetable. Evie reads it and nudges you five minutes before each period, so you never miss the class you meant to record." },
+  { t: "Turns your files into notes", d: "Drop in worksheets, slides, PDFs or a photo of the board. Minerva reads them, groups what belongs together, and writes a proper note per topic." },
+  { t: "Timetable & reminders", d: "Snap a photo of your timetable. Minerva reads it and nudges you five minutes before each period, so you never miss the class you meant to record." },
   { t: "ManageBac, untangled", d: "Assignments, discussions and deadlines pulled in and split into clean streams — with anything urgent lifted to the top instead of buried." },
-  { t: "Ask your own notes", d: "“What did we say about intertextuality?” Evie answers from your notes and transcripts, and tells you which lesson it came from." },
+  { t: "Ask your own notes", d: "“What did we say about intertextuality?” Minerva answers from your notes and transcripts, and tells you which lesson it came from." },
 ]
 
 const FAQS = [
@@ -300,7 +300,7 @@ export default function LandingPage({ onSignIn, signingIn, error }: Props) {
         <div className="mx-auto flex w-[92%] max-w-6xl items-center justify-between py-3.5">
           <button onClick={() => goto("home")} className="flex items-center gap-2.5">
             <span className="grid h-8 w-8 place-items-center rounded-lg bg-gradient-to-br from-brand to-brand-2 font-display text-[16px] font-semibold text-white shadow-sm">E</span>
-            <span className="font-display text-[20px] font-semibold tracking-tight">Evie</span>
+            <span className="font-display text-[20px] font-semibold tracking-tight">Minerva</span>
           </button>
 
           <nav className="hidden items-center gap-7 md:flex">
@@ -378,7 +378,7 @@ export default function LandingPage({ onSignIn, signingIn, error }: Props) {
                   <span className="bg-gradient-to-r from-brand to-brand-2 bg-clip-text italic text-transparent">notes</span>.
                 </h1>
                 <p className="mt-5 max-w-[32ch] text-[18px] text-muted-foreground">
-                  Evie listens to the lesson and writes complete, revision-ready notes — headings, diagrams, quotes and all. You just show up.
+                  Minerva listens to the lesson and writes complete, revision-ready notes — headings, diagrams, quotes and all. You just show up.
                 </p>
                 <div className="mt-8 flex flex-wrap items-center gap-3.5">
                   <SignInBtn big />
@@ -411,7 +411,7 @@ export default function LandingPage({ onSignIn, signingIn, error }: Props) {
             <section className="py-16 md:py-24">
               <div className="mx-auto mb-12 max-w-xl text-center">
                 <span className="font-mono text-[12px] uppercase tracking-[0.14em] text-brand">Three steps, one of them yours</span>
-                <h2 className="mt-3 font-display text-[clamp(28px,4vw,40px)] font-semibold">You press record. Evie does the rest.</h2>
+                <h2 className="mt-3 font-display text-[clamp(28px,4vw,40px)] font-semibold">You press record. Minerva does the rest.</h2>
               </div>
               <div className="grid gap-5 md:grid-cols-3">
                 {STEPS.map((s) => (
@@ -433,7 +433,7 @@ export default function LandingPage({ onSignIn, signingIn, error }: Props) {
                   I'm a builder and a sports guy, not the studious type —{" "}
                   <span className="bg-gradient-to-r from-brand to-brand-2 bg-clip-text italic text-transparent">I still want notes as good as the ones I'd spend an hour making by hand.</span>
                 </blockquote>
-                <p className="mt-5 font-mono text-[13px] text-muted-foreground">— the student Evie was built for</p>
+                <p className="mt-5 font-mono text-[13px] text-muted-foreground">— the student Minerva was built for</p>
               </div>
               <div className="flex flex-col gap-4">
                 {[
@@ -513,7 +513,7 @@ export default function LandingPage({ onSignIn, signingIn, error }: Props) {
         <div className="mx-auto flex w-[92%] max-w-6xl flex-wrap items-center justify-between gap-4 py-8">
           <div className="flex items-center gap-2.5">
             <span className="grid h-7 w-7 place-items-center rounded-lg bg-gradient-to-br from-brand to-brand-2 font-display text-[14px] font-semibold text-white">E</span>
-            <span className="font-display text-[17px] font-semibold">Evie</span>
+            <span className="font-display text-[17px] font-semibold">Minerva</span>
           </div>
           <p className="text-[13.5px] text-muted-foreground">Notes that write themselves while you sit in class.</p>
         </div>

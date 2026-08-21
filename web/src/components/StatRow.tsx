@@ -59,9 +59,9 @@ function normalise(stat: Stat): StatFields {
    stylesheet — React dedupes it by `href`, so mounting several rows still
    yields one <style> in the head. */
 const RISE_CSS = `
-@keyframes evie-rise { from { opacity: 0; transform: translateY(6px); } }
-.evie-rise { animation: evie-rise .22s ease both; }
-@media (prefers-reduced-motion: reduce) { .evie-rise { animation: none; } }
+@keyframes minerva-rise { from { opacity: 0; transform: translateY(6px); } }
+.minerva-rise { animation: minerva-rise .22s ease both; }
+@media (prefers-reduced-motion: reduce) { .minerva-rise { animation: none; } }
 `
 
 /**
@@ -72,7 +72,7 @@ const RISE_CSS = `
  */
 export function RiseKeyframes() {
   return (
-    <style href="evie-rise" precedence="medium">
+    <style href="minerva-rise" precedence="medium">
       {RISE_CSS}
     </style>
   )
@@ -86,7 +86,7 @@ export function StatCard(props: Stat & { index?: number }) {
   return (
     <div
       className={cn(
-        "evie-rise rounded-[9px] border bg-card px-4 py-[14px]",
+        "minerva-rise rounded-[9px] border bg-card px-4 py-[14px]",
         "shadow-[0_1px_2px_rgba(20,20,26,0.04)]",
         "transition-transform duration-[140ms] ease-out hover:-translate-y-0.5",
       )}

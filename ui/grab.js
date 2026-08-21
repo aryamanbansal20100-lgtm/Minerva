@@ -4,7 +4,7 @@
    Why a bookmarklet: ManageBac's API needs a school-admin token, and its
    calendar feed has no attachment field. But your browser is already signed in
    to ManageBac, so it can read the files on a page you are looking at. This
-   runs there and posts them to Evie. Your ManageBac password never comes near
+   runs there and posts them to Minerva. Your ManageBac password never comes near
    this app.
 
    The body is written as a NORMAL function and serialised with toString().
@@ -16,13 +16,13 @@
    ========================================================================== */
 
 /* eslint-disable */
-function evieGrabBody(KEY, SUBJECT, EVIE, UID) {
+function evieGrabBody(KEY, SUBJECT, MINERVA, UID) {
   (async () => {
     const show = (msg, bad) => {
-      let n = document.getElementById('evie-note');
+      let n = document.getElementById('minerva-note');
       if (!n) {
         n = document.createElement('div');
-        n.id = 'evie-note';
+        n.id = 'minerva-note';
         n.style.cssText =
           'position:fixed;z-index:2147483647;right:16px;bottom:16px;max-width:360px;' +
           'padding:14px 18px;border-radius:12px;font:14px/1.45 system-ui,sans-serif;' +
@@ -76,19 +76,19 @@ function evieGrabBody(KEY, SUBJECT, EVIE, UID) {
     const queue = strong.concat(maybe).slice(0, 60);
     if (!queue.length) {
       return show(
-        'Evie: no links to check on this page.\n\n' +
+        'Minerva: no links to check on this page.\n\n' +
         'Open a ManageBac page that lists attachments — a class Files tab, or ' +
         'an assignment with a worksheet on it.', true);
     }
 
-    show('Evie: checking ' + queue.length + ' link(s) on this page…');
+    show('Minerva: checking ' + queue.length + ' link(s) on this page…');
 
     const files = [];
     let pages = 0, problems = [], tooBig = 0;
     for (let i = 0; i < queue.length; i++) {
       const a = queue[i];
       if (i % 5 === 0) {
-        show('Evie: checking link ' + (i + 1) + ' of ' + queue.length +
+        show('Minerva: checking link ' + (i + 1) + ' of ' + queue.length +
              '…\nfound ' + files.length + ' file(s) so far');
       }
       try {
@@ -166,31 +166,31 @@ function evieGrabBody(KEY, SUBJECT, EVIE, UID) {
 
     if (!files.length) {
       return show(
-        'Evie: checked ' + queue.length + ' link(s) and found no files.\n\n' +
+        'Minerva: checked ' + queue.length + ' link(s) and found no files.\n\n' +
         pages + ' were web pages, not attachments.' +
         (tooBig ? '\n' + tooBig + ' were over 20 MB.' : '') +
         (problems.length ? '\n' + problems.slice(0, 2).join('\n') : '') + more, true);
     }
 
-    show('Evie: sending ' + files.length + ' file(s)…');
+    show('Minerva: sending ' + files.length + ' file(s)…');
 
     try {
-      const res = await fetch(EVIE, {
+      const res = await fetch(MINERVA, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-Capture-Key': KEY,
                    'X-Capture-Uid': UID },
         body: JSON.stringify({ subject: SUBJECT, files: files }),
       });
       const out = await res.json().catch(() => ({}));
-      if (!res.ok) return show('Evie: ' + (out.error || res.status), true);
+      if (!res.ok) return show('Minerva: ' + (out.error || res.status), true);
       const bad = out.failed || [];
-      show('Evie: saved ' + (out.saved || []).length + ' file(s) to ' + SUBJECT + '.' +
+      show('Minerva: saved ' + (out.saved || []).length + ' file(s) to ' + SUBJECT + '.' +
            (bad.length ? '\n\nRejected ' + bad.length + ':\n' +
                          bad.slice(0, 3).join('\n') : '') +
            more, false);
     } catch (err) {
-      show('Evie: could not reach the app.\n\n' +
-           'Is it still running at ' + EVIE.replace('/api/capture', '') + ' ?', true);
+      show('Minerva: could not reach the app.\n\n' +
+           'Is it still running at ' + MINERVA.replace('/api/capture', '') + ' ?', true);
     }
   })();
 }

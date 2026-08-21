@@ -21,21 +21,21 @@ const FIREBASE_CONFIG = {
 
 const SDK = "https://www.gstatic.com/firebasejs/10.12.2";
 
-window.Evie = window.Evie || {};
-window.Evie.auth = { user: null, token: "", ready: false, error: "" };
+window.Minerva = window.Minerva || {};
+window.Minerva.auth = { user: null, token: "", ready: false, error: "" };
 
 /* Every fetch carries the ID token. Patching fetch once beats remembering to
    add a header in twenty places and forgetting in the twenty-first. */
 const rawFetch = window.fetch.bind(window);
 window.fetch = (input, init = {}) => {
   const url = typeof input === "string" ? input : (input && input.url) || "";
-  if (url.startsWith("/api/") && window.Evie.auth.token) {
+  if (url.startsWith("/api/") && window.Minerva.auth.token) {
     const headers = { ...(init.headers || {}),
-                      Authorization: "Bearer " + window.Evie.auth.token };
+                      Authorization: "Bearer " + window.Minerva.auth.token };
     // The mail token rides along only on the request that reads mail, so a
     // stray inbox credential is not attached to every call this app makes.
     if (url.startsWith("/api/notifications")) {
-      const mt = sessionStorage.getItem("evie.mail");
+      const mt = sessionStorage.getItem("minerva.mail");
       if (mt) headers["X-Mail-Token"] = mt;
     }
     init = { ...init, headers };
@@ -50,7 +50,7 @@ function gate(state, message) {
   el.innerHTML = `
     <div class="gate-card">
       <div class="gate-mark">E</div>
-      <h1>Evie</h1>
+      <h1>Minerva</h1>
       <p class="sub">Notes that write themselves while you sit in class.</p>
       ${state === "loading"
         ? '<p class="muted">Checking your sign-in…</p>'
@@ -68,7 +68,7 @@ function gate(state, message) {
              accounts. Your notes are tied to your account.</p>`}
     </div>`;
   const btn = document.getElementById("gsi");
-  if (btn) btn.onclick = () => window.Evie.auth.signIn();
+  if (btn) btn.onclick = () => window.Minerva.auth.signIn();
 }
 
 (async function initAuth() {
@@ -82,7 +82,7 @@ function gate(state, message) {
     await mod.setPersistence(auth, mod.browserLocalPersistence);
   } catch (err) {
     // Offline, or the school firewall blocks gstatic. Say so plainly.
-    window.Evie.auth.error = String(err.message || err);
+    window.Minerva.auth.error = String(err.message || err);
     gate("out", "Could not load Google sign-in — " +
       "check the connection, or that gstatic.com is not blocked here.");
     return;
@@ -109,9 +109,9 @@ function gate(state, message) {
      be holding. It lasts about an hour, then the student reconnects. */
   const MAIL_SCOPE = "https://www.googleapis.com/auth/gmail.readonly";
 
-  window.Evie.mail = {
-    token: () => sessionStorage.getItem("evie.mail") || "",
-    forget: () => sessionStorage.removeItem("evie.mail"),
+  window.Minerva.mail = {
+    token: () => sessionStorage.getItem("minerva.mail") || "",
+    forget: () => sessionStorage.removeItem("minerva.mail"),
     connect: async () => {
       /* DANGER, handled here: signInWithPopup does not just fetch a scope, it
          signs the app in as whichever account is chosen. Notes are stored per
@@ -145,7 +145,7 @@ function gate(state, message) {
       if (result.user && result.user.uid !== before.uid) {
         // Wrong account chosen. Get back to the original one immediately —
         // leaving it switched would hide every note the student has made.
-        sessionStorage.removeItem("evie.mail");
+        sessionStorage.removeItem("minerva.mail");
         try { await mod.signOut(auth); } catch (e) { /* fall through */ }
         return { ok: false, error:
           "that is a different Google account (" + (result.user.email || "") +
@@ -160,12 +160,12 @@ function gate(state, message) {
       if (!token) {
         return { ok: false, error: "Google did not grant mail access. Make sure you tick the permission it asks for." };
       }
-      sessionStorage.setItem("evie.mail", token);
+      sessionStorage.setItem("minerva.mail", token);
       return { ok: true };
     },
   };
 
-  window.Evie.auth.signIn = async () => {
+  window.Minerva.auth.signIn = async () => {
     try {
       await mod.signInWithPopup(auth, provider);
     } catch (err) {
@@ -180,27 +180,27 @@ function gate(state, message) {
       gate("out", `Sign-in failed — ${code || err.message}`);
     }
   };
-  window.Evie.auth.signOut = () => mod.signOut(auth);
+  window.Minerva.auth.signOut = () => mod.signOut(auth);
 
   try { await mod.getRedirectResult(auth); } catch { /* first load, fine */ }
 
   mod.onAuthStateChanged(auth, async user => {
-    window.Evie.auth.user = user;
-    window.Evie.auth.ready = true;
+    window.Minerva.auth.user = user;
+    window.Minerva.auth.ready = true;
     if (!user) {
-      window.Evie.auth.token = "";
+      window.Minerva.auth.token = "";
       gate("out", "");
       document.getElementById("app")?.classList.add("hide");
       document.getElementById("onboard")?.classList.add("hide");
       return;
     }
-    window.Evie.auth.token = await user.getIdToken();
+    window.Minerva.auth.token = await user.getIdToken();
     document.getElementById("gate").className = "hide";
 
     // Tokens last an hour; refresh well before that so a long lesson never
     // dies mid-recording with a 401.
     setInterval(async () => {
-      try { window.Evie.auth.token = await user.getIdToken(true); } catch {}
+      try { window.Minerva.auth.token = await user.getIdToken(true); } catch {}
     }, 30 * 60 * 1000);
 
     if (typeof boot === "function") boot();

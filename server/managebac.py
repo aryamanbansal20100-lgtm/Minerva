@@ -90,7 +90,7 @@ def fetch_ics(url: str, timeout: int = 25) -> str:
     if not url.lower().startswith(("http://", "https://")):
         raise FeedError(f"that does not look like a calendar URL: {url[:60]}")
     req = urllib.request.Request(url, headers={
-        "User-Agent": "Mozilla/5.0 (compatible; Evie/1.0; student notebook)",
+        "User-Agent": "Mozilla/5.0 (compatible; Minerva/1.0; student notebook)",
         "Accept": "text/calendar, text/plain, */*",
     })
     try:

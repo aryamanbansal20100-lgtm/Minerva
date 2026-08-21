@@ -7,7 +7,7 @@
 
 services:
   - type: web
-    name: evie-api
+    name: minerva-api
     runtime: python
     plan: free
     # Standard library only — there is genuinely nothing to install. The upgrade
@@ -28,7 +28,7 @@ services:
       - key: FIREBASE_API_KEY
         sync: false
       # The Netlify address of the front end, so CORS lets it through.
-      # e.g. https://evie.netlify.app
+      # e.g. https://minerva.netlify.app
       - key: EVIE_ALLOWED_ORIGINS
         sync: false
       - key: PYTHON_VERSION
@@ -42,6 +42,6 @@ services:
     # on it. A paid disk removes the risk entirely:
     #
     # disk:
-    #   name: evie-data
+    #   name: minerva-data
     #   mountPath: /opt/render/project/src/data
     #   sizeGB: 1

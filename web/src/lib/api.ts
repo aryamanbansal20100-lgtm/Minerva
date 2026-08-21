@@ -31,7 +31,7 @@ export function currentIdToken(): string {
 
 /** Shown when the connection dropped rather than the server refusing. */
 export const CONNECTION_LOST =
-  "lost the connection to Evie. Nothing was lost — check it is still " +
+  "lost the connection to Minerva. Nothing was lost — check it is still " +
   "running, then try again.";
 
 /** Shown when even a forced token refresh could not satisfy the server. */
@@ -108,7 +108,7 @@ async function readJson<T>(response: Response): Promise<T> {
    Hosted, the two are split: the static app can sit on Netlify, but the Python
    backend — a long-running process with SQLite and the API keys — cannot, so it
    is hosted separately. Set VITE_API_BASE at build time to point at it, e.g.
-   VITE_API_BASE=https://evie-api.onrender.com  */
+   VITE_API_BASE=https://minerva-api.onrender.com  */
 const API_BASE = (import.meta.env.VITE_API_BASE || "").replace(/\/$/, "");
 
 function apiUrl(path: string): string {

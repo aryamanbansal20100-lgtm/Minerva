@@ -635,7 +635,7 @@ export default function NotebookPage({
         <Panel title="Delete notebook" className="mb-4">
           <div className="space-y-3 px-3.5 py-3.5">
             <p className="text-[12.5px] text-muted-foreground">
-              A notebook can only be deleted once it is empty — Evie refuses
+              A notebook can only be deleted once it is empty — Minerva refuses
               while anything is still filed under it, and says what is left.
             </p>
             <div className="flex flex-wrap items-center gap-2">

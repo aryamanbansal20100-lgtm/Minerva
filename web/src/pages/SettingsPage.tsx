@@ -1,5 +1,5 @@
 /* ==========================================================================
-   SettingsPage.tsx — who the student is, and what Evie is allowed to read.
+   SettingsPage.tsx — who the student is, and what Minerva is allowed to read.
 
    Four things live here, in the order people look for them:
      Account        the Google account the notes are stored against, shown as
@@ -687,7 +687,7 @@ export function SettingsPage({ state, refresh }: SettingsPageProps) {
             and anything urgent, kept in separate lists.{" "}
             <b className="text-foreground">No password is stored, ever.</b> You
             sign in with Google and it grants read-only access, which you can
-            take back at any time from your Google account. Evie cannot send,
+            take back at any time from your Google account. Minerva cannot send,
             reply to or delete anything.
           </Help>
 

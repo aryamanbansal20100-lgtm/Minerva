@@ -50,7 +50,7 @@ export const MAIL_SCOPE = "https://www.googleapis.com/auth/gmail.readonly";
 /* The mail token, stored WITH its expiry.
 
    It used to live in sessionStorage, which dies the instant the tab closes — so
-   every time the student reopened Evie they had to reconnect, which reads as
+   every time the student reopened Minerva they had to reconnect, which reads as
    "it keeps expiring." Now it lives in localStorage alongside the moment it
    stops being valid, so:
 
@@ -62,7 +62,7 @@ export const MAIL_SCOPE = "https://www.googleapis.com/auth/gmail.readonly";
    It is still never sent to our database and is revocable any time at
    myaccount.google.com/permissions — the privacy stance is intact; only the
    nagging is gone. */
-export const MAIL_STORAGE_KEY = "evie.mail";
+export const MAIL_STORAGE_KEY = "minerva.mail";
 
 // Google access tokens last 3600s; treat as good for 55 min to leave a margin.
 const MAIL_TTL_MS = 55 * 60 * 1000;

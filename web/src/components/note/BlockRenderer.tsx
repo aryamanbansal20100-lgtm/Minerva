@@ -1080,7 +1080,7 @@ const KINDS: Record<string, Draw> = {
 
 /** One diagram, or nothing at all when the spec cannot be drawn. */
 export function Diagram({ spec }: { spec: DiagramSpec }) {
-  const marker = `evie-arrow-${useId().replace(/[^A-Za-z0-9]/g, "")}`;
+  const marker = `minerva-arrow-${useId().replace(/[^A-Za-z0-9]/g, "")}`;
   if (!spec || typeof spec !== "object") return null;
   const draw = KINDS[String(spec.kind || "").toLowerCase()];
   if (!draw) return null;

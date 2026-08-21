@@ -281,7 +281,7 @@ def managebac_view() -> dict:
 # HTTP
 # ---------------------------------------------------------------------------
 class Handler(SimpleHTTPRequestHandler):
-    server_version = "Evie/2.0"
+    server_version = "Minerva/2.0"
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=str(WEB_ROOT), **kwargs)
@@ -299,7 +299,7 @@ class Handler(SimpleHTTPRequestHandler):
         2. The hosted front end, when the static app is served from somewhere
            else (Netlify, say) while this Python process runs on its own host.
            Set EVIE_ALLOWED_ORIGINS to a comma-separated list for that, e.g.
-           EVIE_ALLOWED_ORIGINS=https://evie.netlify.app,https://evie.app
+           EVIE_ALLOWED_ORIGINS=https://minerva.netlify.app,https://minerva.app
 
         Everything is still Firebase-gated per request, so CORS only decides who
         may ask — never who may read another student's data.
@@ -617,7 +617,7 @@ class Handler(SimpleHTTPRequestHandler):
                                note["subject"], note["topic"])
             # When no model could write the note, ai.tidy hands back the raw
             # input chopped into bullets. Saving that overwrites whatever good
-            # notes were already there and — worse — looks like Evie tried and
+            # notes were already there and — worse — looks like Minerva tried and
             # produced rubbish. Refuse, keep the note untouched, and say why.
             if composed.get("_failed"):
                 return self._json({
@@ -1186,7 +1186,7 @@ def serve() -> None:
         port = int(config.env("EVIE_PORT", "7400") or 7400)
 
     print()
-    print("  Evie — notes for students")
+    print("  Minerva — notes for students")
     print(f"  student   {profile['name'] or '(not set up yet)'}"
           + (f" · {profile['grade']} · {profile['curriculum']}"
              if profile["onboarded"] else ""))

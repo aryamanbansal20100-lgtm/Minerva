@@ -336,7 +336,7 @@ function Panel({
 }) {
   return (
     <section
-      className={cn("evie-rise overflow-hidden", CARD)}
+      className={cn("minerva-rise overflow-hidden", CARD)}
       style={{ animationDelay: `${Math.min(index, 3) * 0.04}s` }}
     >
       <header className="flex items-center gap-2 border-b px-3.5 py-2.5">
@@ -815,7 +815,7 @@ export function AssessmentsPage({
         <>
           {/* -------------------------------------------------------- hero */}
           {next ? (
-            <section className="brand-panel evie-rise mb-4 rounded-[10px] px-5 py-[18px]">
+            <section className="brand-panel minerva-rise mb-4 rounded-[10px] px-5 py-[18px]">
               <div className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.08em] text-muted-foreground">
                 <span className="text-brand">
                   <IconCalendar />

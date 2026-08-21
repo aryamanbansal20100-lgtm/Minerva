@@ -293,7 +293,7 @@ const QuestionCard = memo(function QuestionCard({
     <article
       className={cn(
         CARD,
-        "evie-rise overflow-hidden",
+        "minerva-rise overflow-hidden",
         "hover:-translate-y-0.5 hover:shadow-[0_2px_4px_rgba(28,27,25,0.06),0_14px_34px_rgba(28,27,25,0.10)]",
       )}
       style={{ animationDelay: `${Math.min(index, 5) * 0.04}s` }}

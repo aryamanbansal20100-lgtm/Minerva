@@ -1,5 +1,5 @@
 /* ==========================================================================
-   Evie — notes for students.
+   Minerva — notes for students.
 
    Design rule, and the whole reason this app exists: ManageBac colours
    everything, so nothing stands out. Here colour means exactly one thing —
@@ -443,7 +443,7 @@ ul.itemlist { list-style: none; margin: 0; padding: 0; }
 /* Bottom LEFT, not centre.
 
    Centred, this sat directly on top of the note text box — you could not see
-   what you were typing. Bottom right is taken by Ask Evie. It is a glance, not
+   what you were typing. Bottom right is taken by Ask Minerva. It is a glance, not
    a control, so it is also click-through: even where it overlaps something,
    the thing underneath still works. */
 #nowstrip {

@@ -72,7 +72,7 @@ const Diagram = (() => {
   function arrow(svg, x1, y1, x2, y2, label) {
     svg.appendChild(el('line', {
       x1, y1, x2, y2, stroke: 'var(--ink-4)', 'stroke-width': 1.4,
-      'marker-end': 'url(#evie-arrow)',
+      'marker-end': 'url(#minerva-arrow)',
     }));
     if (label) {
       const mx = (x1 + x2) / 2, my = (y1 + y2) / 2;
@@ -95,7 +95,7 @@ const Diagram = (() => {
     });
     const defs = el('defs');
     const marker = el('marker', {
-      id: 'evie-arrow', viewBox: '0 0 10 10', refX: 9, refY: 5,
+      id: 'minerva-arrow', viewBox: '0 0 10 10', refX: 9, refY: 5,
       markerWidth: 6, markerHeight: 6, orient: 'auto-start-reverse',
     });
     marker.appendChild(el('path', { d: 'M 0 0 L 10 5 L 0 10 z', fill: 'var(--ink-4)' }));

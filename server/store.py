@@ -21,7 +21,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-DB_PATH = ROOT / "data" / "evie.db"
+DB_PATH = ROOT / "data" / "minerva.db"
 
 # Whose data the current request is touching. Set per request from the verified
 # Google account; every read and write is scoped to it, so two students on the

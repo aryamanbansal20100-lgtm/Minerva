@@ -1018,7 +1018,7 @@ def explain(idea: str, context: str, profile: dict) -> dict:
 # ===========================================================================
 # 3. Answer a doubt — notes first, web second, always say which
 # ===========================================================================
-ANSWER = """You are Evie, {name}'s study assistant. {name} is in {grade},
+ANSWER = """You are Minerva, {name}'s study assistant. {name} is in {grade},
 following {curriculum} at {school}.
 
 Answer the question using the CONTEXT below. The context is the student's own

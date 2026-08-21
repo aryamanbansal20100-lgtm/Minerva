@@ -1,7 +1,7 @@
 {
   "version": "0.0.1",
   "configurations": [
-    { "name": "evie", "runtimeExecutable": "python", "runtimeArgs": ["run.py"], "port": 7400 },
-    { "name": "evie-web", "runtimeExecutable": "npm", "runtimeArgs": ["run", "dev", "--prefix", "web"], "port": 5173 }
+    { "name": "minerva", "runtimeExecutable": "python", "runtimeArgs": ["run.py"], "port": 7400 },
+    { "name": "minerva-web", "runtimeExecutable": "npm", "runtimeArgs": ["run", "dev", "--prefix", "web"], "port": 5173 }
   ]
 }

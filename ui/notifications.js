@@ -73,7 +73,7 @@ function renderNotifications() {
   if (btn) btn.onclick = connectSchoolEmail;
   const off = $('#nf-disconnect');
   if (off) off.onclick = () => {
-    window.Evie.mail.forget();
+    window.Minerva.mail.forget();
     toast('School email disconnected. Nothing was kept.');
     loadNotifications(true);
   };
@@ -83,7 +83,7 @@ function emailBanner(email) {
   if (email.connected) {
     return `<div class="cal tip" style="margin-top:14px">
       <div class="cal-h">Reading ${esc(email.address)}</div>
-      <div class="cal-b"><p>Read-only. Evie cannot send, reply to or delete
+      <div class="cal-b"><p>Read-only. Minerva cannot send, reply to or delete
         anything. <button class="btn ghost sm" id="nf-disconnect">Disconnect</button></p>
       </div></div>`;
   }
@@ -92,7 +92,7 @@ function emailBanner(email) {
       email.error ? 'School email needs reconnecting' : 'Add your school email'}</div>
     <div class="cal-b">
       ${email.error ? `<p>${esc(email.error)}</p>` : `<p>Sign in with your school
-        Google account and Evie can show school mail here alongside ManageBac.
+        Google account and Minerva can show school mail here alongside ManageBac.
         <b>No password is stored</b> — Google grants read-only access which you
         can revoke any time from your Google account.</p>`}
       <p><button class="btn primary" id="nf-connect">Connect school email</button></p>
@@ -131,14 +131,14 @@ function notifRow(i, tone) {
 
 async function connectSchoolEmail() {
   const btn = $('#nf-connect');
-  if (!window.Evie || !window.Evie.mail) {
+  if (!window.Minerva || !window.Minerva.mail) {
     return toast('Sign in with Google first.', true);
   }
   btn.disabled = true;
   const was = btn.textContent;
   btn.textContent = 'Waiting for Google…';
   try {
-    const out = await window.Evie.mail.connect();
+    const out = await window.Minerva.mail.connect();
     if (out.cancelled) return;
     if (!out.ok) return toast(out.error || 'could not connect', true);
     toast('School email connected — read-only.');

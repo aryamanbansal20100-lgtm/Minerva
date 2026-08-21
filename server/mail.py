@@ -55,7 +55,7 @@ def _get(path: str, token: str, **params) -> dict:
         if exc.code in (401, 403):
             if "insufficient" in detail.lower() or "scope" in detail.lower():
                 raise MailError(
-                    "Evie is not allowed to read this inbox yet. Press "
+                    "Minerva is not allowed to read this inbox yet. Press "
                     "“Connect school email” again and tick the "
                     "permission Google asks for.") from exc
             low = detail.lower()

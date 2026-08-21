@@ -103,12 +103,25 @@ def transcribe(audio: bytes, filename: str = "chunk.webm",
                 raise TranscriptionUnavailable(
                     "Groq rate limit hit. The free tier allows 7,200 "
                     "audio-seconds an hour; wait a few minutes.") from exc
-            # An HTTP error is a real answer, not a blip — do not retry it.
+            # 502/503/504 come from the gateway in front of Groq, not from Groq
+            # deciding anything about this request — the service is briefly
+            # unreachable. Treating that as final threw away a slice of a real
+            # lesson mid-recording. Retry it like any other blip.
+            if exc.code in (500, 502, 503, 504):
+                last = exc
+                continue
+            # A 4xx is a real answer about this request — do not retry it.
             raise TranscriptionUnavailable(f"Groq {exc.code}: {detail}") from exc
         except (urllib.error.URLError, OSError, ValueError) as exc:
             last = exc                       # network blip — try again
             continue
 
+    if isinstance(last, urllib.error.HTTPError):
+        raise TranscriptionUnavailable(
+            "Groq is down right now (it answered " + str(last.code) + " four "
+            "times). Nothing is wrong with your recording — keep it running "
+            "and this slice will be retried, or stop and press Write it up "
+            "once Groq is back.")
     raise TranscriptionUnavailable(
         "the network dropped while sending this slice — check the wifi. "
         f"({last})")

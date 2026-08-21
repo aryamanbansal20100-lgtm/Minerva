@@ -117,8 +117,44 @@ export default function App() {
     }
   }, [])
 
+  /* Keep the shell live too.
+
+     The sidebar counts, the Due badge and the nudge all come from /api/state,
+     which was fetched once at load. Leave the app open through a lesson and
+     everything it tells you is from whenever you opened it. Same rule as the
+     notifications page: refresh on a timer, refresh the moment the tab comes
+     back to the front, and go quiet while it is hidden. */
   useEffect(() => {
     refresh()
+
+    let timer: ReturnType<typeof setInterval> | null = null
+    const start = () => {
+      if (timer) return
+      timer = setInterval(() => {
+        if (document.visibilityState === "visible") refresh()
+      }, 60000)
+    }
+    const stop = () => {
+      if (timer) clearInterval(timer)
+      timer = null
+    }
+    const onVisible = () => {
+      if (document.visibilityState === "visible") {
+        refresh()
+        start()
+      } else {
+        stop()
+      }
+    }
+
+    start()
+    document.addEventListener("visibilitychange", onVisible)
+    window.addEventListener("focus", onVisible)
+    return () => {
+      stop()
+      document.removeEventListener("visibilitychange", onVisible)
+      window.removeEventListener("focus", onVisible)
+    }
   }, [refresh])
 
   const newNotebook = useCallback(async () => {

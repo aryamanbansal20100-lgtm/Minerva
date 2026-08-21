@@ -269,8 +269,49 @@ export default function NotificationsPage({
     }
   }, []);
 
+  /* Live, not a snapshot.
+
+     This loaded exactly once and never again, so a page left open all evening
+     showed the state of the world at the moment it was opened — which is why
+     mail "never arrived" and everything looked permanently up to date.
+
+     Poll every 45 seconds, and refresh immediately whenever the tab is brought
+     back to the front, which is the moment a student actually looks. Polling
+     pauses while the tab is hidden so a backgrounded page is not hammering the
+     server or a phone battery for nobody. */
   useEffect(() => {
     void load();
+
+    let timer: ReturnType<typeof setInterval> | null = null;
+
+    const start = () => {
+      if (timer) return;
+      timer = setInterval(() => {
+        if (document.visibilityState === "visible") void load();
+      }, 45000);
+    };
+    const stop = () => {
+      if (timer) clearInterval(timer);
+      timer = null;
+    };
+
+    const onVisible = () => {
+      if (document.visibilityState === "visible") {
+        void load();
+        start();
+      } else {
+        stop();
+      }
+    };
+
+    start();
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("focus", onVisible);
+    return () => {
+      stop();
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("focus", onVisible);
+    };
   }, [load]);
 
   const blocks = useMemo(() => blocksBySource(data.streams), [data.streams]);

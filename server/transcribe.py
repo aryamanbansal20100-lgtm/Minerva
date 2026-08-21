@@ -32,7 +32,7 @@ def configured() -> bool:
 def status() -> dict:
     return {
         "ok": configured(),
-        "engine": "groq/" + config.env("GROQ_STT_MODEL", "whisper-large-v3-turbo"),
+        "engine": "groq/" + config.env("GROQ_STT_MODEL", "whisper-large-v3"),
         "reason": "" if configured() else
                   "no GROQ_API_KEY — recording is off. Free key: console.groq.com/keys",
     }
@@ -55,7 +55,15 @@ def _multipart(fields: dict, filename: str, payload: bytes) -> tuple[bytes, str]
 
 
 def transcribe(audio: bytes, filename: str = "chunk.webm",
-               language: str = "") -> dict:
+               language: str = "", context: str = "") -> dict:
+    """Audio in, text out.
+
+    `context` is the tail of what was heard just before this slice. Whisper
+    accepts it as a prompt and uses it to carry spelling, names and terminology
+    across a cut — without it, every slice starts cold and a word split across
+    the boundary is simply lost. This is the single biggest quality difference
+    between chopped-up audio and one continuous transcription.
+    """
     if not audio:
         raise TranscriptionUnavailable("empty recording")
     key = config.env("GROQ_API_KEY")
@@ -65,7 +73,7 @@ def transcribe(audio: bytes, filename: str = "chunk.webm",
         raise TranscriptionUnavailable(
             "slice is over the 25 MB limit — shorten EVIE_CHUNK_MINUTES")
 
-    fields = {"model": config.env("GROQ_STT_MODEL", "whisper-large-v3-turbo"),
+    fields = {"model": config.env("GROQ_STT_MODEL", "whisper-large-v3"),
               "response_format": "json"}
     # Deliberately NOT pinning a language. Teachers switch between Hindi and
     # English mid-sentence, and forcing `language=en` makes Whisper try to
@@ -74,6 +82,12 @@ def transcribe(audio: bytes, filename: str = "chunk.webm",
     language = language or config.env("EVIE_STT_LANGUAGE", "")
     if language:
         fields["language"] = language
+    # Whisper caps the prompt at 224 tokens; the last few hundred characters of
+    # the previous slice is the useful part and stays well inside that.
+    if context:
+        fields["prompt"] = context.strip()[-800:]
+    # Lower temperature keeps it transcribing rather than paraphrasing.
+    fields["temperature"] = "0"
     body, ctype = _multipart(fields, filename, audio)
 
     # School wifi drops packets and DNS lookups fail intermittently — the

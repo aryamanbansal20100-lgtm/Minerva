@@ -20,8 +20,19 @@ import { cn } from "@/lib/utils"
    second and must never trigger a React re-render. Only what the user actually
    sees is state. */
 
-const CHUNK_MS = 25 * 1000        // short slices → the transcript keeps flowing
-const FIRST_CHUNK_MS = 6 * 1000   // first words in ~6 seconds, not 20
+/* Slice length is an accuracy decision, not a UI one.
+
+   Whisper reasons over a 30-second window. Cutting every 25s meant almost
+   every slice was chopped mid-sentence, so it never had a whole thought to work
+   from and words landing on a boundary were lost outright. Chasing a "live"
+   feel made the transcript materially worse — which is the opposite of the
+   point, because the notes are the product and the live text is only feedback.
+
+   90 seconds gives Whisper several complete sentences of context. The first
+   slice stays short so the student can see within seconds that it is hearing
+   the room. */
+const CHUNK_MS = 90 * 1000
+const FIRST_CHUNK_MS = 8 * 1000
 const TICK_MS = 100
 const BITRATE = 64000
 
@@ -48,7 +59,7 @@ const COACH: Record<CoachKey, { title: string; advice: string; tone: string }> =
   quiet: { title: "Very quiet", advice: "Move the laptop closer to the teacher, or lift the lid a bit.", tone: "text-warn" },
   loud: { title: "Too loud — it may clip", advice: "Move it slightly away or turn the lid down.", tone: "text-warn" },
   good: { title: "Picking up the room", advice: "Leave it be. Notes are written when you press stop.", tone: "text-ok" },
-  waiting: { title: "Listening", advice: "First words appear in a few seconds.", tone: "text-ok" },
+  waiting: { title: "Listening", advice: "First words appear in a few seconds, then about every 90.", tone: "text-ok" },
   working: { title: "Transcribing", advice: "Keep it running — this happens in the background.", tone: "text-ok" },
 }
 

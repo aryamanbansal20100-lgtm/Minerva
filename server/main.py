@@ -1112,9 +1112,17 @@ class Handler(SimpleHTTPRequestHandler):
             store.adopt_recording(rebuilt["id"], rec_id)
             rec = store.get_recording(rec_id) or rebuilt
             rec_id = rec["id"]
+        # Hand Whisper the tail of what was heard just before this slice. It
+        # uses it to carry names, spellings and subject vocabulary across the
+        # cut. Without it every slice starts cold, so a term the teacher used
+        # all lesson gets re-guessed each time and a word split across the
+        # boundary is simply lost.
+        prior = store.chunks(rec_id)
+        context = " ".join((c.get("text") or "") for c in prior[-2:]).strip()
         try:
             out = transcribe.transcribe(
-                self._body(), self.headers.get("X-Filename", "chunk.webm"))
+                self._body(), self.headers.get("X-Filename", "chunk.webm"),
+                context=context)
         except transcribe.TranscriptionUnavailable as exc:
             return self._json({"error": str(exc), "degraded": True}, 503)
 

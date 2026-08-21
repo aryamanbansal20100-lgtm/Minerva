@@ -234,7 +234,28 @@ function Dot({ tone }: { tone: "muted" | "ok" | "late" | "info" }) {
    The page
    ------------------------------------------------------------------------- */
 
+type BackupState = {
+  verdict: string;
+  message: string;
+  local?: { notes: number; documents: number; tasks: number };
+  cloud?: { saved?: number; failed?: number; last_error?: string };
+};
+
 export function SettingsPage({ state, refresh }: SettingsPageProps) {
+  /* Whether the student's work actually survives losing this laptop. It was
+     previously unknowable from inside the app: sync failures were swallowed,
+     so a broken backup looked exactly like a working one. */
+  const [backup, setBackup] = useState<BackupState | null>(null);
+  useEffect(() => {
+    let live = true;
+    apiGet<BackupState>("/api/backup")
+      .then((b) => live && setBackup(b))
+      .catch(() => live && setBackup({ verdict: "unknown", message: "Could not check the backup." }));
+    return () => {
+      live = false;
+    };
+  }, []);
+
   const { user, signOut, mailToken, connectMail, forgetMail } = useAuth();
 
   const [ownState, setOwnState] = useState<SettingsState | null>(null);
@@ -656,6 +677,45 @@ export function SettingsPage({ state, refresh }: SettingsPageProps) {
           <Help>
             These fill the subject picker on every piece of homework, so a
             wrongly-guessed subject can always be corrected to one of yours.
+          </Help>
+        </Card>
+
+        {/* ------------------------------------------------ cloud backup */}
+        <Card label="Cloud backup">
+          <div className="flex items-center gap-2">
+            <Dot
+              tone={
+                backup?.verdict === "ok"
+                  ? "ok"
+                  : backup?.verdict === "failing" || backup?.verdict === "partial"
+                    ? "late"
+                    : "muted"
+              }
+            />
+            <span className="text-[13px]">
+              {backup ? backup.message : "Checking…"}
+            </span>
+          </div>
+          {backup?.local ? (
+            <p className="mt-1.5 font-mono text-[11.5px] tabular-nums text-muted-foreground">
+              on this device: {backup.local.notes} notes · {backup.local.documents} documents ·{" "}
+              {backup.local.tasks} tasks
+              {backup.cloud?.saved ? ` · ${backup.cloud.saved} saved to cloud` : ""}
+              {backup.cloud?.failed ? ` · ${backup.cloud.failed} failed` : ""}
+            </p>
+          ) : null}
+          {backup?.cloud?.last_error ? (
+            <p className="mt-1.5 break-words text-[12px] text-late">
+              {backup.cloud.last_error}
+            </p>
+          ) : null}
+          <Help>
+            Your notes live on this device and are mirrored to your Google
+            account, so signing in anywhere brings them with you. If this says
+            nothing is reaching the cloud, publish the rules in
+            <b> firestore.rules</b> (Firebase console → Firestore → Rules) —
+            until then Firestore rejects every write and only this device has
+            your work.
           </Help>
         </Card>
 

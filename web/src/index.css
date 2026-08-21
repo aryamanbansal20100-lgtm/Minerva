@@ -1,0 +1,213 @@
+@import "tailwindcss";
+
+/* ==========================================================================
+   Theme.
+
+   Aiming at the Notion / Orbit register: near-monochrome, one restrained
+   accent, generous whitespace, small confident type. Colour marks status and
+   nothing else — the previous build used pastel fills as decoration, which is
+   what made it read as a school worksheet.
+
+   These are the shadcn token names, so any component pasted from the registry
+   themes itself correctly without edits.
+   ========================================================================== */
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+:root {
+  --radius: 0.625rem;
+
+  /* Warmed, not clinical. A faint warmth in the paper and a real brand colour
+     make this read as something a student opens by choice, not a form. The
+     brand is a friendly indigo-violet — energetic without being loud, and it
+     carries into buttons, the active nav, focus rings and progress. */
+  --brand: oklch(0.58 0.19 280);
+  --brand-2: oklch(0.62 0.17 320);
+  --brand-soft: oklch(0.96 0.03 285);
+  --brand-ring: oklch(0.7 0.15 285);
+
+  --background: oklch(0.992 0.004 300);
+  --foreground: oklch(0.22 0.02 285);
+
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.22 0.02 285);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.22 0.02 285);
+
+  /* Primary IS the brand now. The old near-black was correct for a dev tool and
+     wrong for a student one. */
+  --primary: oklch(0.56 0.19 280);
+  --primary-foreground: oklch(0.99 0.01 285);
+
+  --secondary: oklch(0.965 0.008 300);
+  --secondary-foreground: oklch(0.3 0.02 285);
+  --muted: oklch(0.964 0.008 300);
+  --muted-foreground: oklch(0.53 0.015 285);
+  --accent: oklch(0.96 0.03 285);
+  --accent-foreground: oklch(0.4 0.12 285);
+
+  --destructive: oklch(0.577 0.19 25);
+  --destructive-foreground: oklch(0.99 0 0);
+
+  --border: oklch(0.92 0.006 300);
+  --input: oklch(0.9 0.008 300);
+  --ring: oklch(0.7 0.15 285);
+
+  /* Status. Used on text and 2px rules, never as a fill. */
+  --ok: oklch(0.55 0.09 165);
+  --warn: oklch(0.62 0.12 75);
+  --late: oklch(0.55 0.16 27);
+  --info: oklch(0.56 0.10 245);
+
+  --file-tree-bg: oklch(0.985 0.001 90);
+  --file-tree-hover: oklch(0.955 0.002 90);
+  --folder-icon: oklch(0.62 0.10 245);
+}
+
+.dark {
+  /* A hint of violet in the near-black, so dark mode feels lit rather than
+     dead, and the brand carries through. */
+  --brand: oklch(0.72 0.16 285);
+  --brand-2: oklch(0.74 0.15 320);
+  --brand-soft: oklch(0.26 0.05 285);
+  --brand-ring: oklch(0.6 0.14 285);
+
+  --background: oklch(0.17 0.012 285);
+  --foreground: oklch(0.96 0.004 300);
+
+  --card: oklch(0.212 0.014 285);
+  --card-foreground: oklch(0.96 0.004 300);
+  --popover: oklch(0.212 0.014 285);
+  --popover-foreground: oklch(0.96 0.004 300);
+
+  --primary: oklch(0.7 0.16 285);
+  --primary-foreground: oklch(0.16 0.02 285);
+
+  --secondary: oklch(0.255 0.014 285);
+  --secondary-foreground: oklch(0.96 0.004 300);
+  --muted: oklch(0.255 0.014 285);
+  --muted-foreground: oklch(0.68 0.015 285);
+  --accent: oklch(0.28 0.03 285);
+  --accent-foreground: oklch(0.9 0.04 285);
+
+  --destructive: oklch(0.68 0.17 25);
+  --destructive-foreground: oklch(0.99 0 0);
+
+  --border: oklch(0.29 0.012 285);
+  --input: oklch(0.33 0.014 285);
+  --ring: oklch(0.6 0.14 285);
+
+  --ok: oklch(0.72 0.10 165);
+  --warn: oklch(0.78 0.11 75);
+  --late: oklch(0.70 0.14 27);
+  --info: oklch(0.70 0.09 245);
+
+  --file-tree-bg: oklch(0.185 0.004 285);
+  --file-tree-hover: oklch(0.245 0.005 285);
+  --folder-icon: oklch(0.70 0.09 245);
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  --color-brand: var(--brand);
+  --color-brand-2: var(--brand-2);
+  --color-brand-soft: var(--brand-soft);
+
+  --color-ok: var(--ok);
+  --color-warn: var(--warn);
+  --color-late: var(--late);
+  --color-info: var(--info);
+
+  --color-file-tree-bg: var(--file-tree-bg);
+  --color-file-tree-hover: var(--file-tree-hover);
+  --color-folder-icon: var(--folder-icon);
+
+  --radius-sm: calc(var(--radius) - 2px);
+  --radius-md: var(--radius);
+  --radius-lg: calc(var(--radius) + 2px);
+
+  --font-sans: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "Spline Sans Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
+  --font-display: "Fraunces", Georgia, "Times New Roman", serif;
+  --font-hand: "Caveat", ui-rounded, cursive;
+}
+
+@layer base {
+  * { border-color: var(--border); }
+  html, body {
+    /* A decorative element that overflows must never make the whole page
+       scroll sideways on a phone. Clip at the root rather than hunting every
+       future offender one at a time. */
+    overflow-x: clip;
+    max-width: 100%;
+  }
+  body {
+    background: var(--background);
+    color: var(--foreground);
+    font-family: var(--font-sans);
+    font-size: 14px;
+    letter-spacing: -0.006em;
+    -webkit-font-smoothing: antialiased;
+  }
+  h1, h2, h3, h4 { letter-spacing: -0.018em; font-weight: 600; }
+  /* Dates, counts and times line up in columns. */
+  table, .tabular { font-variant-numeric: tabular-nums; }
+  ::selection { background: color-mix(in oklch, var(--brand) 22%, transparent); }
+}
+
+@layer components {
+  /* The brand gradient — used on the avatar mark, the primary CTA sheen and
+     progress. A little life goes a long way toward "a student would open this". */
+  .brand-gradient {
+    background-image: linear-gradient(135deg, var(--brand) 0%, var(--brand-2) 100%);
+  }
+  /* Primary buttons get a subtle gradient instead of a flat fill. */
+  .btn-brand {
+    background-image: linear-gradient(135deg, var(--brand) 0%, var(--brand-2) 100%);
+    color: var(--primary-foreground);
+    box-shadow: 0 1px 2px color-mix(in oklch, var(--brand) 40%, transparent),
+                0 4px 14px color-mix(in oklch, var(--brand) 22%, transparent);
+    transition: transform .12s ease, box-shadow .12s ease, filter .12s ease;
+  }
+  .btn-brand:hover { filter: brightness(1.05); transform: translateY(-1px); }
+  .btn-brand:active { transform: translateY(0); }
+
+  /* A soft brand-tinted panel, for greetings and highlights. */
+  .brand-panel {
+    background: color-mix(in oklch, var(--brand-soft) 70%, var(--card));
+    border: 1px solid color-mix(in oklch, var(--brand) 18%, var(--border));
+  }
+}
+
+/* Eight distinct, legible subject hues, keyed by the same index the pages
+   already compute. Colour-coding subjects is the single change that makes a
+   study app feel like it is about the student's actual subjects. */
+:root {
+  --subj-0: oklch(0.62 0.17 25);
+  --subj-1: oklch(0.66 0.15 55);
+  --subj-2: oklch(0.68 0.14 130);
+  --subj-3: oklch(0.62 0.13 165);
+  --subj-4: oklch(0.6 0.14 230);
+  --subj-5: oklch(0.58 0.18 285);
+  --subj-6: oklch(0.62 0.18 330);
+  --subj-7: oklch(0.6 0.13 200);
+}

@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Evie</title>
+<link rel="stylesheet" href="styles.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='8' fill='%232f6f5e'/><text x='16' y='23' font-size='19' font-family='sans-serif' font-weight='700' fill='white' text-anchor='middle'>E</text></svg>">
+</head>
+<body>
+
+<a class="sr sr-focus" href="#main">Skip to main content</a>
+
+<section id="gate" aria-label="Sign in"></section>
+
+<!-- ===================== onboarding ===================== -->
+<section id="onboard" class="hide" aria-label="Set up Evie">
+  <div class="ob-card">
+    <div class="steps" aria-hidden="true"><i class="on"></i><i></i><i></i></div>
+
+    <div data-step="0">
+      <h1>Hello. I'm Evie.</h1>
+      <p class="sub">I record your classes and turn them into notes worth revising
+        from. First, who are you? This shapes every note I write — the level, the
+        command terms, the way things get explained.</p>
+      <div class="field">
+        <label for="ob-name">Your name</label>
+        <input id="ob-name" autocomplete="name" placeholder="Aryaman Bansal">
+      </div>
+      <div class="field">
+        <label for="ob-curriculum">Curriculum</label>
+        <select id="ob-curriculum">
+          <option value="">Choose…</option>
+          <option>IB Diploma Programme</option>
+          <option>IB MYP</option>
+          <option>CBSE</option>
+          <option>ICSE / ISC</option>
+          <option>Cambridge IGCSE</option>
+          <option>Cambridge A Level</option>
+          <option>Edexcel / GCSE</option>
+          <option>AP / US High School</option>
+          <option>State Board</option>
+          <option>Other</option>
+        </select>
+        <div class="help">Notes get written the way your syllabus marks them —
+          IB command terms, CBSE answer structure, and so on.</div>
+      </div>
+      <div class="field">
+        <label for="ob-grade">Current grade or year</label>
+        <input id="ob-grade" placeholder="DP1 / Grade 11">
+      </div>
+      <div class="ob-actions">
+        <button class="btn primary" data-next="1">Continue</button>
+      </div>
+    </div>
+
+    <div data-step="1" class="hide">
+      <h1>Where do you study?</h1>
+      <p class="sub">Used for deadlines, term dates and context. Nothing leaves
+        your machine except the text sent to the model that writes your notes.</p>
+      <div class="field">
+        <label for="ob-school">School</label>
+        <input id="ob-school" placeholder="Shiv Nadar School">
+      </div>
+      <div class="field">
+        <label for="ob-city">City</label>
+        <input id="ob-city" placeholder="Gurgaon">
+      </div>
+      <div class="field">
+        <label for="ob-country">Country</label>
+        <input id="ob-country" placeholder="India">
+      </div>
+      <div class="field">
+        <label>Your subjects</label>
+        <input id="ob-subject-input" placeholder="Type a subject and press Enter">
+        <div class="chips" id="ob-subjects"></div>
+        <div class="help">One notebook is made per subject. You can add more later.</div>
+      </div>
+      <div class="ob-actions">
+        <button class="btn ghost" data-next="0">Back</button>
+        <button class="btn primary" data-next="2">Continue</button>
+      </div>
+    </div>
+
+    <div data-step="2" class="hide">
+      <h1>Link ManageBac</h1>
+      <p class="sub">Optional, and you can do it later — but this is what fixes
+        the notifications. I split assignments, exams and events into separate
+        lists and sort them by how soon they actually are.</p>
+      <div class="field">
+        <label for="ob-mb">ManageBac calendar link</label>
+        <input id="ob-mb" placeholder="https://…/calendar.ics  or  webcal://…">
+        <div class="help">
+          In ManageBac: <b>My Workspace → Subscribe to Calendar → copy the link.</b>
+          Paste it here. It is read-only — I can never change anything in ManageBac.
+        </div>
+      </div>
+      <div class="ob-actions">
+        <button class="btn ghost" data-next="1">Back</button>
+        <button class="btn primary" id="ob-finish">Finish setup</button>
+        <span class="muted" style="font-size:13px">or
+          <a href="#" id="ob-skip">skip for now</a></span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== app ===================== -->
+<main id="app" class="hide">
+  <aside id="side" aria-label="Sidebar">
+    <!-- The student's identity, not the app's. Whose notes these are is
+         useful information; the app's own name in the corner of its own
+         window is not — and with two Google accounts in play, seeing which
+         one you are in matters. -->
+    <div class="brand">
+      <img id="avatar" class="mark" alt="" hidden>
+      <div class="mark" id="initial" aria-hidden="true">E</div>
+      <div class="brand-who">
+        <b id="who-name">Evie</b>
+        <small id="who">—</small>
+      </div>
+    </div>
+
+    <nav class="nav" aria-label="Main">
+      <a href="#/notes" data-route="/notes">Notes <span class="count" id="c-notes"></span></a>
+      <a href="#/timetable" data-route="/timetable">Timetable <span class="count" id="c-tt"></span></a>
+      <a href="#/calendar" data-route="/calendar">Calendar</a>
+      <a href="#/due" data-route="/due">Due <span class="count" id="c-due"></span></a>
+      <a href="#/alerts" data-route="/alerts">Notifications <span class="count" id="c-nf"></span></a>
+      <a href="#/managebac" data-route="/managebac">ManageBac <span class="count" id="c-mb"></span></a>
+      <a href="#/settings" data-route="/settings">Settings</a>
+    </nav>
+
+    <div class="side-head">
+      <span class="lbl">Notebooks</span>
+      <button class="btn ghost sm" id="new-note">+ New</button>
+    </div>
+    <div class="side-scroll" id="note-list" role="list" aria-label="Your notes"></div>
+
+    <div id="side-foot"><span id="foot-state" role="status" aria-live="polite">starting…</span></div>
+  </aside>
+
+  <section id="main" tabindex="-1" aria-label="Main content">
+    <div id="view"></div>
+  </section>
+</main>
+
+<!-- ===================== ask dock ===================== -->
+<div id="askdock">
+  <div class="panel" id="askdock-panel">
+    <header>
+      <b style="flex:1">Ask Evie</b>
+      <span class="pill" id="ask-scope">all notes</span>
+      <button class="btn ghost sm" id="ask-close" aria-label="Close Ask Evie">✕</button>
+    </header>
+    <div id="asklog" role="log" aria-live="polite" aria-label="Conversation"></div>
+    <form id="askform">
+      <label class="sr" for="askinput">Your question</label>
+      <input id="askinput" placeholder="Explain this to me…" autocomplete="off">
+      <button class="btn primary sm" type="submit">Ask</button>
+    </form>
+  </div>
+  <div style="display:flex"><button id="askfab" aria-expanded="false" aria-controls="askdock-panel">Ask Evie</button></div>
+</div>
+
+<div id="nowstrip" class="hide" aria-live="polite"></div>
+
+<div id="toast" role="status" aria-live="polite" aria-atomic="true"></div>
+
+<script src="auth.js" type="module"></script>
+<script src="grab.js"></script>
+<script src="notebook.js"></script>
+<script src="notifications.js"></script>
+<script src="calendar.js"></script>
+<script src="diagram.js"></script>
+<script src="timetable.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

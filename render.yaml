@@ -1,0 +1,47 @@
+# Render blueprint — hosts the Python backend.
+#
+# Netlify serves static files only, so it cannot run this half. Render can, on
+# its free tier, and reads this file automatically when you point it at the
+# repository. Nothing here needs editing before the first deploy; the secrets
+# are typed into Render's own dashboard, never into a file that gets committed.
+
+services:
+  - type: web
+    name: evie-api
+    runtime: python
+    plan: free
+    # Standard library only — there is genuinely nothing to install. The upgrade
+    # keeps pip itself current so the build step does not warn.
+    buildCommand: "python -m pip install --upgrade pip"
+    # EVIE_NO_RELOAD: the file-watcher that restarts on code changes is for
+    # local development. On a host the code never changes under the process, and
+    # a watcher would just burn a worker.
+    startCommand: "EVIE_NO_RELOAD=1 python run.py"
+    healthCheckPath: /
+    envVars:
+      # --- you set these in the Render dashboard, marked sync:false so they
+      # --- are never written into this file or the repository.
+      - key: GROQ_API_KEY
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: FIREBASE_API_KEY
+        sync: false
+      # The Netlify address of the front end, so CORS lets it through.
+      # e.g. https://evie.netlify.app
+      - key: EVIE_ALLOWED_ORIGINS
+        sync: false
+      - key: PYTHON_VERSION
+        value: "3.12.7"
+      - key: EVIE_NO_RELOAD
+        value: "1"
+
+    # A free instance has an ephemeral filesystem: every redeploy wipes the
+    # per-user SQLite files under data/. Notes survive because they mirror to
+    # Firestore, but that restore path must be tested before real students rely
+    # on it. A paid disk removes the risk entirely:
+    #
+    # disk:
+    #   name: evie-data
+    #   mountPath: /opt/render/project/src/data
+    #   sizeGB: 1

@@ -1,0 +1,33 @@
+# Netlify config — hosts the front end (the React app).
+#
+# Netlify serves static files, which is exactly what `web/dist` is. The Python
+# backend lives elsewhere (see render.yaml); the two are joined by the
+# VITE_API_BASE value in web/.env.production.
+
+[build]
+  base = "web"
+  command = "npm run build"
+  publish = "dist"
+
+[build.environment]
+  NODE_VERSION = "20"
+
+# The app routes with the hash (#/notes, #/practice), so every request is for
+# index.html. Without this rule a refresh on a deep link would 404.
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
+
+[[headers]]
+  for = "/assets/*"
+  [headers.values]
+    # Vite fingerprints these filenames, so a changed file is a changed URL and
+    # a long cache is safe.
+    Cache-Control = "public, max-age=31536000, immutable"
+
+[[headers]]
+  for = "/index.html"
+  [headers.values]
+    # Never cache the entry point, or a deploy takes hours to reach anyone.
+    Cache-Control = "no-cache"

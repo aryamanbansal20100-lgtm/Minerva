@@ -1,0 +1,518 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Evie</title>
+<meta name="description" content="Evie sits in class with you and writes the notes. Record a lesson, get complete revision notes with diagrams — for IB Diploma students.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,650&family=Hanken+Grotesk:wght@400;500;600;700&family=Spline+Sans+Mono:wght@400;500&family=Caveat:wght@500;600&display=swap">
+<style>
+  :root {
+    --paper: #faf9ff;
+    --paper-2: #f1eefb;
+    --card: #ffffff;
+    --ink: #17151f;
+    --ink-2: #4a4658;
+    --ink-3: #78748a;
+    --line: #e7e3f3;
+    --line-2: #d8d3ea;
+    --brand: #5b4be0;
+    --brand-2: #a24bd6;
+    --brand-soft: #ede9fd;
+    --pencil: #8a8698;
+    --pencil-soft: #edeaf2;
+    --ok: #2f9e6f;
+    --warn: #b9822a;
+    --late: #cf4b3b;
+    --shadow: 0 1px 2px rgba(23,21,31,.04), 0 12px 34px rgba(23,21,31,.06);
+    --shadow-lift: 0 2px 6px rgba(91,75,224,.10), 0 22px 60px rgba(91,75,224,.13);
+  }
+  :root:not([data-theme="light"]) {
+    @media (prefers-color-scheme: dark) {
+      --paper: #100e18;
+      --paper-2: #17141f;
+      --card: #1a1726;
+      --ink: #f3f1fb;
+      --ink-2: #bcb8cc;
+      --ink-3: #837e97;
+      --line: #272233;
+      --line-2: #332c45;
+      --brand: #8b7cf0;
+      --brand-2: #c684ec;
+      --brand-soft: #211a37;
+      --pencil: #8b869d;
+      --pencil-soft: #201d2b;
+      --ok: #4cc593;
+      --warn: #d6a24f;
+      --late: #e56a5a;
+      --shadow: 0 1px 2px rgba(0,0,0,.4), 0 12px 34px rgba(0,0,0,.35);
+      --shadow-lift: 0 2px 6px rgba(0,0,0,.4), 0 22px 60px rgba(80,58,180,.28);
+    }
+  }
+  :root[data-theme="dark"] {
+    --paper: #100e18;
+    --paper-2: #17141f;
+    --card: #1a1726;
+    --ink: #f3f1fb;
+    --ink-2: #bcb8cc;
+    --ink-3: #837e97;
+    --line: #272233;
+    --line-2: #332c45;
+    --brand: #8b7cf0;
+    --brand-2: #c684ec;
+    --brand-soft: #211a37;
+    --pencil: #8b869d;
+    --pencil-soft: #201d2b;
+    --ok: #4cc593;
+    --warn: #d6a24f;
+    --late: #e56a5a;
+    --shadow: 0 1px 2px rgba(0,0,0,.4), 0 12px 34px rgba(0,0,0,.35);
+    --shadow-lift: 0 2px 6px rgba(0,0,0,.4), 0 22px 60px rgba(80,58,180,.28);
+  }
+
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+  body {
+    margin: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: "Hanken Grotesk", system-ui, sans-serif;
+    font-size: 17px;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+  h1, h2, h3 { font-family: "Fraunces", Georgia, serif; font-weight: 600; line-height: 1.08; text-wrap: balance; margin: 0; letter-spacing: -0.01em; }
+  p { margin: 0; }
+  a { color: inherit; text-decoration: none; }
+  .wrap { width: min(1120px, 92vw); margin: 0 auto; }
+
+  /* eyebrow / labels */
+  .eyebrow {
+    font-family: "Spline Sans Mono", monospace;
+    font-size: 12px; font-weight: 500;
+    letter-spacing: 0.14em; text-transform: uppercase;
+    color: var(--brand);
+  }
+
+  /* buttons */
+  .btn {
+    display: inline-flex; align-items: center; gap: 8px;
+    font-family: "Hanken Grotesk", sans-serif;
+    font-weight: 600; font-size: 15px;
+    padding: 12px 20px; border-radius: 11px;
+    border: 1px solid transparent; cursor: pointer;
+    transition: transform .15s ease, box-shadow .15s ease, background .15s ease;
+  }
+  .btn-primary {
+    color: #fff;
+    background-image: linear-gradient(135deg, var(--brand), var(--brand-2));
+    box-shadow: 0 2px 8px rgba(91,75,224,.30), 0 10px 30px rgba(91,75,224,.22);
+  }
+  .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(91,75,224,.36), 0 18px 44px rgba(91,75,224,.28); }
+  .btn-ghost { color: var(--ink); background: var(--card); border-color: var(--line-2); box-shadow: var(--shadow); }
+  .btn-ghost:hover { transform: translateY(-2px); border-color: var(--brand); color: var(--brand); }
+
+  /* ---------------- nav ---------------- */
+  header.nav {
+    position: sticky; top: 0; z-index: 50;
+    backdrop-filter: saturate(1.5) blur(14px);
+    background: color-mix(in oklab, var(--paper) 82%, transparent);
+    border-bottom: 1px solid var(--line);
+  }
+  .nav-inner { display: flex; align-items: center; justify-content: space-between; padding: 14px 0; }
+  .brand { display: flex; align-items: center; gap: 11px; font-family: "Fraunces", serif; font-weight: 600; font-size: 21px; letter-spacing: -0.02em; }
+  .brand .mark {
+    width: 30px; height: 30px; border-radius: 9px;
+    background-image: linear-gradient(135deg, var(--brand), var(--brand-2));
+    display: grid; place-items: center; color: #fff; font-size: 16px;
+    box-shadow: 0 4px 12px rgba(91,75,224,.35);
+  }
+  .nav-links { display: flex; align-items: center; gap: 28px; }
+  .nav-links a.link { font-size: 14.5px; color: var(--ink-2); font-weight: 500; transition: color .15s; }
+  .nav-links a.link:hover { color: var(--brand); }
+  @media (max-width: 780px) { .nav-links a.link { display: none; } }
+
+  /* ---------------- hero ---------------- */
+  .hero { padding: 74px 0 40px; position: relative; overflow: hidden; }
+  .hero::before {
+    content: ""; position: absolute; inset: -30% -10% auto -10%; height: 620px; z-index: 0;
+    background:
+      radial-gradient(60% 60% at 22% 12%, color-mix(in oklab, var(--brand) 20%, transparent), transparent 70%),
+      radial-gradient(46% 46% at 82% 4%, color-mix(in oklab, var(--brand-2) 16%, transparent), transparent 70%);
+    pointer-events: none;
+  }
+  .hero-grid { position: relative; z-index: 1; display: grid; grid-template-columns: 1.02fr 0.98fr; gap: 54px; align-items: center; }
+  @media (max-width: 940px) { .hero-grid { grid-template-columns: 1fr; gap: 42px; } }
+
+  .hero h1 { font-size: clamp(40px, 6.4vw, 68px); font-weight: 650; }
+  .hero h1 .accent { font-style: italic; background-image: linear-gradient(120deg, var(--brand), var(--brand-2)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .hero .lede { margin-top: 22px; font-size: 19px; color: var(--ink-2); max-width: 30ch; }
+  .hero .cta-row { margin-top: 32px; display: flex; gap: 14px; flex-wrap: wrap; }
+  .hero .reassure { margin-top: 20px; font-size: 13.5px; color: var(--ink-3); display: flex; align-items: center; gap: 8px; }
+  .hero .reassure svg { width: 16px; height: 16px; color: var(--ok); flex: none; }
+
+  /* the transformation visual */
+  .transform { position: relative; }
+  .card {
+    background: var(--card); border: 1px solid var(--line); border-radius: 16px;
+    box-shadow: var(--shadow);
+  }
+  .heard {
+    position: relative; z-index: 1; padding: 18px 20px 20px;
+    transform: rotate(-2deg); max-width: 340px;
+  }
+  .heard .tag { font-family: "Spline Sans Mono", monospace; font-size: 10.5px; letter-spacing: .12em; text-transform: uppercase; color: var(--pencil); display: flex; align-items: center; gap: 7px; }
+  .heard .tag .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--late); box-shadow: 0 0 0 3px color-mix(in oklab, var(--late) 22%, transparent); animation: pulse 1.8s ease-in-out infinite; }
+  @keyframes pulse { 0%,100%{opacity:1;} 50%{opacity:.35;} }
+  @media (prefers-reduced-motion: reduce) { .heard .tag .dot { animation: none; } }
+  .scrawl { font-family: "Caveat", cursive; font-size: 21px; line-height: 1.35; color: var(--pencil); margin-top: 10px; }
+  .transcript { font-family: "Spline Sans Mono", monospace; font-size: 11.5px; line-height: 1.7; color: var(--ink-3); margin-top: 12px; border-top: 1px dashed var(--line-2); padding-top: 11px; }
+
+  .written {
+    position: relative; z-index: 2; padding: 22px 24px 24px; margin: -34px 0 0 auto;
+    max-width: 400px; box-shadow: var(--shadow-lift); border-color: var(--line-2);
+  }
+  .written .nib { font-family: "Spline Sans Mono", monospace; font-size: 10.5px; letter-spacing: .12em; text-transform: uppercase; color: var(--brand); }
+  .written h3 { font-size: 22px; margin-top: 8px; }
+  .written .rule { height: 1px; background: var(--line); margin: 14px 0; }
+  .written ul { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 9px; }
+  .written li { position: relative; padding-left: 20px; font-size: 14px; color: var(--ink-2); line-height: 1.45; }
+  .written li::before { content: ""; position: absolute; left: 2px; top: 8px; width: 7px; height: 7px; border-radius: 2px; background-image: linear-gradient(135deg, var(--brand), var(--brand-2)); }
+  .written li b { color: var(--ink); font-weight: 600; }
+  .written .quote { margin-top: 12px; border-left: 2px solid var(--brand); padding: 2px 0 2px 13px; font-family: "Fraunces", serif; font-style: italic; font-size: 14.5px; color: var(--ink); }
+  .figure { margin-top: 16px; background: var(--paper-2); border: 1px solid var(--line); border-radius: 11px; padding: 14px; }
+  .figure .cap { font-family: "Spline Sans Mono", monospace; font-size: 10px; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-3); text-align: center; margin-top: 9px; }
+  .connector { position: absolute; left: 46%; top: 44%; z-index: 0; color: var(--brand); opacity: .5; }
+  @media (max-width: 940px) { .connector { display: none; } .written { margin-top: -20px; } }
+
+  /* reveal-on-scroll */
+  .reveal { opacity: 0; transform: translateY(22px); transition: opacity .7s ease, transform .7s ease; }
+  .reveal.in { opacity: 1; transform: none; }
+  @media (prefers-reduced-motion: reduce) { .reveal { opacity: 1; transform: none; transition: none; } }
+
+  /* ---------------- logos / trust strip ---------------- */
+  .strip { border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); padding: 22px 0; margin-top: 46px; background: var(--paper-2); }
+  .strip-inner { display: flex; align-items: center; justify-content: center; gap: 34px; flex-wrap: wrap; font-family: "Spline Sans Mono", monospace; font-size: 12.5px; letter-spacing: .05em; color: var(--ink-3); }
+  .strip-inner b { color: var(--ink-2); font-weight: 500; }
+
+  /* ---------------- sections ---------------- */
+  section.band { padding: 88px 0; }
+  .sec-head { max-width: 640px; margin: 0 auto 52px; text-align: center; }
+  .sec-head h2 { font-size: clamp(30px, 4.4vw, 44px); margin-top: 14px; }
+  .sec-head p { margin-top: 16px; font-size: 18px; color: var(--ink-2); }
+
+  /* how it works — a real 3-step sequence */
+  .steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; }
+  @media (max-width: 860px) { .steps { grid-template-columns: 1fr; } }
+  .step { position: relative; padding: 28px 24px; }
+  .step .num { font-family: "Spline Sans Mono", monospace; font-size: 13px; color: var(--brand); font-weight: 500; }
+  .step h3 { font-size: 22px; margin-top: 14px; }
+  .step p { margin-top: 10px; color: var(--ink-2); font-size: 15.5px; }
+  .step .rule { height: 2px; width: 40px; margin-top: 18px; border-radius: 2px; background-image: linear-gradient(90deg, var(--brand), var(--brand-2)); }
+
+  /* features */
+  .features { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
+  @media (max-width: 940px) { .features { grid-template-columns: repeat(2, 1fr); } }
+  @media (max-width: 620px) { .features { grid-template-columns: 1fr; } }
+  .feat {
+    background: var(--card); border: 1px solid var(--line); border-radius: 16px;
+    padding: 26px 24px; box-shadow: var(--shadow); transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease;
+  }
+  .feat:hover { transform: translateY(-4px); box-shadow: var(--shadow-lift); border-color: var(--line-2); }
+  .feat .ic { width: 42px; height: 42px; border-radius: 11px; display: grid; place-items: center; background: var(--brand-soft); color: var(--brand); margin-bottom: 16px; }
+  .feat .ic svg { width: 22px; height: 22px; }
+  .feat h3 { font-size: 19px; }
+  .feat p { margin-top: 9px; font-size: 14.5px; color: var(--ink-2); line-height: 1.55; }
+  .feat.wide { grid-column: span 2; }
+  @media (max-width: 620px) { .feat.wide { grid-column: span 1; } }
+
+  /* the story / for-you band */
+  .story { background: var(--paper-2); border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+  .story-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 54px; align-items: center; }
+  @media (max-width: 860px) { .story-grid { grid-template-columns: 1fr; gap: 32px; } }
+  .story blockquote { margin: 0; font-family: "Fraunces", serif; font-weight: 500; font-size: clamp(24px, 3.2vw, 33px); line-height: 1.28; letter-spacing: -0.01em; }
+  .story blockquote .hl { background-image: linear-gradient(120deg, var(--brand), var(--brand-2)); -webkit-background-clip: text; background-clip: text; color: transparent; font-style: italic; }
+  .story .who { margin-top: 22px; font-family: "Spline Sans Mono", monospace; font-size: 13px; color: var(--ink-3); }
+  .checklist { display: flex; flex-direction: column; gap: 16px; }
+  .checklist .item { display: flex; gap: 14px; align-items: flex-start; }
+  .checklist .item .tick { width: 26px; height: 26px; border-radius: 8px; flex: none; display: grid; place-items: center; background: color-mix(in oklab, var(--ok) 16%, transparent); color: var(--ok); }
+  .checklist .item .tick svg { width: 15px; height: 15px; }
+  .checklist .item p { font-size: 15.5px; color: var(--ink-2); }
+  .checklist .item b { color: var(--ink); }
+
+  /* final cta */
+  .final { text-align: center; }
+  .final-card {
+    position: relative; overflow: hidden;
+    background-image: linear-gradient(135deg, var(--brand), var(--brand-2));
+    border-radius: 26px; padding: 66px 32px; color: #fff;
+    box-shadow: 0 30px 80px rgba(91,75,224,.32);
+  }
+  .final-card::after { content: ""; position: absolute; inset: 0; background: radial-gradient(60% 80% at 80% 0%, rgba(255,255,255,.16), transparent 60%); pointer-events: none; }
+  .final-card h2 { color: #fff; font-size: clamp(32px, 5vw, 50px); position: relative; }
+  .final-card p { color: rgba(255,255,255,.9); font-size: 18px; margin-top: 16px; position: relative; }
+  .final-card .btn { position: relative; margin-top: 30px; }
+  .btn-on-brand { background: #fff; color: var(--brand); box-shadow: 0 8px 24px rgba(0,0,0,.18); }
+  .btn-on-brand:hover { transform: translateY(-2px); }
+  .final-card .fine { margin-top: 18px; font-size: 13px; color: rgba(255,255,255,.8); font-family: "Spline Sans Mono", monospace; }
+
+  /* footer */
+  footer.foot { padding: 44px 0 56px; border-top: 1px solid var(--line); }
+  .foot-inner { display: flex; align-items: center; justify-content: space-between; gap: 20px; flex-wrap: wrap; }
+  .foot .brand { font-size: 18px; }
+  .foot .made { font-size: 13.5px; color: var(--ink-3); }
+  .foot .made b { color: var(--ink-2); font-weight: 600; }
+
+  .theme-toggle {
+    width: 34px; height: 34px; border-radius: 9px; display: grid; place-items: center;
+    border: 1px solid var(--line-2); background: var(--card); color: var(--ink-2); cursor: pointer;
+    transition: color .15s, border-color .15s;
+  }
+  .theme-toggle:hover { color: var(--brand); border-color: var(--brand); }
+  .theme-toggle svg { width: 17px; height: 17px; }
+  :focus-visible { outline: 2px solid var(--brand); outline-offset: 3px; border-radius: 4px; }
+</style>
+</head>
+<body>
+
+<header class="nav">
+  <div class="wrap nav-inner">
+    <a class="brand" href="#top"><span class="mark">E</span> Evie</a>
+    <nav class="nav-links">
+      <a class="link" href="#how">How it works</a>
+      <a class="link" href="#features">Features</a>
+      <a class="link" href="#story">Why</a>
+      <button class="theme-toggle" id="themeToggle" aria-label="Toggle dark mode">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"></path></svg>
+      </button>
+      <a class="btn btn-primary" href="#get">Open the app</a>
+    </nav>
+  </div>
+</header>
+
+<main id="top">
+
+  <!-- ======================= HERO ======================= -->
+  <section class="hero">
+    <div class="wrap hero-grid">
+      <div>
+        <span class="eyebrow">For IB Diploma students</span>
+        <h1 style="margin-top:18px">Sit in class.<br>Leave with the <span class="accent">notes</span>.</h1>
+        <p class="lede">Evie listens to the lesson and writes complete, revision-ready notes — headings, diagrams, quotes and all. You just show up.</p>
+        <div class="cta-row">
+          <a class="btn btn-primary" href="#get">Start taking notes
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"></path></svg>
+          </a>
+          <a class="btn btn-ghost" href="#how">See how it works</a>
+        </div>
+        <p class="reassure">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"></path></svg>
+          Sign in with Google · your notes on every device · free to start
+        </p>
+      </div>
+
+      <div class="transform reveal">
+        <!-- what Evie hears -->
+        <div class="card heard">
+          <div class="tag"><span class="dot"></span> Recording · Economics</div>
+          <p class="scrawl">so PES is % change in quantity supplied over % change in price… write 7.5, that's elastic… five categories, draw each one…</p>
+          <p class="transcript">okay so if we expand this formula it becomes<br>new quantity minus old over old times 100…</p>
+        </div>
+
+        <!-- the connector -->
+        <svg class="connector" width="120" height="90" viewBox="0 0 120 90" fill="none">
+          <path d="M6 8 C 60 20, 40 74, 112 78" stroke="currentColor" stroke-width="2" stroke-dasharray="4 6" stroke-linecap="round"/>
+          <path d="M104 70 l10 8 -12 5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+        </svg>
+
+        <!-- what Evie writes -->
+        <div class="card written">
+          <div class="nib">Evie · revision note</div>
+          <h3>Price Elasticity of Supply</h3>
+          <div class="rule"></div>
+          <ul>
+            <li><b>PES</b> measures how much quantity supplied responds to a price change: <b>%ΔQ&#8347; / %ΔP</b>.</li>
+            <li>Worked example: price $25→$30, supply 20k→50k → <b>PES = 7.5</b> (highly elastic).</li>
+            <li>Five categories, from perfectly inelastic to perfectly elastic.</li>
+          </ul>
+          <p class="quote">"An intellectual hatred is the worst — write that phrase exactly."</p>
+          <div class="figure">
+            <svg viewBox="0 0 260 120" width="100%" height="96" fill="none" font-family="Spline Sans Mono">
+              <line x1="34" y1="12" x2="34" y2="98" stroke="var(--line-2)" stroke-width="1.4"/>
+              <line x1="34" y1="98" x2="238" y2="98" stroke="var(--line-2)" stroke-width="1.4"/>
+              <text x="16" y="60" fill="var(--ink-3)" font-size="9" transform="rotate(-90 16 60)">Price</text>
+              <text x="120" y="114" fill="var(--ink-3)" font-size="9">Quantity</text>
+              <path d="M40 96 L226 22" stroke="var(--brand)" stroke-width="2.4" stroke-linecap="round"/>
+              <path d="M150 96 L226 40" stroke="var(--brand-2)" stroke-width="2.4" stroke-linecap="round" stroke-dasharray="5 4"/>
+              <text x="196" y="18" fill="var(--brand)" font-size="9">elastic</text>
+            </svg>
+            <p class="cap">Auto-drawn from the lesson</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="strip">
+      <div class="wrap strip-inner">
+        <span><b>Records the whole class</b></span>
+        <span><b>Writes the notes</b></span>
+        <span><b>Draws the diagrams</b></span>
+        <span><b>Catches the homework</b></span>
+        <span><b>Syncs everywhere</b></span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ======================= HOW ======================= -->
+  <section class="band" id="how">
+    <div class="wrap">
+      <div class="sec-head">
+        <span class="eyebrow">Three steps, one of them yours</span>
+        <h2>You press record. Evie does the rest.</h2>
+        <p>No typing during class. No re-writing it neatly at home. The lesson becomes a proper note by the time you pack up.</p>
+      </div>
+      <div class="steps">
+        <div class="step card reveal">
+          <div class="num">Step 01</div>
+          <h3>Press record</h3>
+          <p>One tap when the lesson starts — even with the laptop lid half down. Evie hears the teacher across the room, in English or Hindi, and keeps up live.</p>
+          <div class="rule"></div>
+        </div>
+        <div class="step card reveal">
+          <div class="num">Step 02</div>
+          <h3>Evie writes it up</h3>
+          <p>Press stop and you get structured notes: headings, sub-points, the phrases the teacher told you to write exactly, diagrams and graphs — and any homework, filed with its due date.</p>
+          <div class="rule"></div>
+        </div>
+        <div class="step card reveal">
+          <div class="num">Step 03</div>
+          <h3>You just revise</h3>
+          <p>Every note lands in the right subject notebook, searchable, on every device. Ask Evie a question and it answers from your own notes.</p>
+          <div class="rule"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ======================= FEATURES ======================= -->
+  <section class="band" id="features" style="padding-top:20px">
+    <div class="wrap">
+      <div class="sec-head">
+        <span class="eyebrow">Everything a note needs</span>
+        <h2>Built for how a lesson actually goes</h2>
+      </div>
+      <div class="features">
+        <div class="feat reveal">
+          <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"></path><path d="M5 11a7 7 0 0 0 14 0M12 18v4"></path></svg></div>
+          <h3>Records the whole class</h3>
+          <p>Far-field audio tuned for a classroom, not a headset. It transcribes as it goes, so a dropped connection costs minutes, not the lesson.</p>
+        </div>
+        <div class="feat reveal">
+          <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19V5M4 19h16M8 15l3-4 3 3 4-6"></path></svg></div>
+          <h3>Diagrams &amp; graphs</h3>
+          <p>Supply curves, velocity–time graphs, flowcharts, mind maps — drawn automatically when the topic has a shape, placed in the right section.</p>
+        </div>
+        <div class="feat reveal">
+          <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h10l6 6v10a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1z"></path><path d="M14 4v6h6M8 14h8M8 18h5"></path></svg></div>
+          <h3>Turns your files into notes</h3>
+          <p>Drop in worksheets, slides, PDFs or a photo of the board. Evie reads them, groups what belongs together, and writes a proper note per topic.</p>
+        </div>
+        <div class="feat reveal">
+          <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"></rect><path d="M16 2v4M8 2v4M3 10h18M8 15h3"></path></svg></div>
+          <h3>Timetable &amp; reminders</h3>
+          <p>Snap a photo of your timetable. Evie reads it and nudges you five minutes before each period, so you never miss the class you meant to record.</p>
+        </div>
+        <div class="feat reveal">
+          <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16v12H7l-3 3z"></path><path d="M8 9h8M8 12h5"></path></svg></div>
+          <h3>ManageBac, untangled</h3>
+          <p>Assignments, discussions and deadlines pulled in and split into clean streams — with anything urgent lifted to the top instead of buried.</p>
+        </div>
+        <div class="feat reveal">
+          <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m21 21-4.3-4.3"></path></svg></div>
+          <h3>Ask your own notes</h3>
+          <p>"What did we say about intertextuality?" Evie answers from your notes and transcripts, and tells you which lesson it came from.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ======================= STORY ======================= -->
+  <section class="band story" id="story">
+    <div class="wrap story-grid">
+      <div class="reveal">
+        <span class="eyebrow">Why it exists</span>
+        <blockquote style="margin-top:16px">I'm a builder and a sports guy, not the studious type — <span class="hl">I still want notes as good as the ones I'd spend an hour making by hand.</span></blockquote>
+        <p class="who">— the student Evie was built for</p>
+      </div>
+      <div class="checklist">
+        <div class="item">
+          <span class="tick"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"></path></svg></span>
+          <p><b>Notes to your syllabus.</b> Written to the standard your course marks against, using its command terms — not a generic summary.</p>
+        </div>
+        <div class="item">
+          <span class="tick"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"></path></svg></span>
+          <p><b>Keeps the teacher's exact words.</b> The phrases you'd lose marks for missing are kept verbatim, in their own line.</p>
+        </div>
+        <div class="item">
+          <span class="tick"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"></path></svg></span>
+          <p><b>Nothing to install, nothing to leak.</b> Google sign-in only, your data tied to your account, your keys never leave the server.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ======================= FINAL CTA ======================= -->
+  <section class="band final" id="get">
+    <div class="wrap">
+      <div class="final-card">
+        <h2>Your next class could write itself.</h2>
+        <p>Open Evie, sign in with Google, and press record when the lesson starts.</p>
+        <a class="btn btn-on-brand" href="http://localhost:7400">Open Evie
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"></path></svg>
+        </a>
+        <p class="fine">Runs on your machine · free tier · no card</p>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer class="foot">
+  <div class="wrap foot-inner">
+    <a class="brand" href="#top"><span class="mark">E</span> Evie</a>
+    <p class="made">Notes that write themselves while you sit in class.</p>
+  </div>
+</footer>
+
+<script>
+  // Theme toggle — remembers the choice, and stamps the root so it beats the OS.
+  (function () {
+    var root = document.documentElement;
+    var saved = null;
+    try { saved = localStorage.getItem("evie-theme"); } catch (e) {}
+    if (saved) root.setAttribute("data-theme", saved);
+    var btn = document.getElementById("themeToggle");
+    btn.addEventListener("click", function () {
+      var isDark = root.getAttribute("data-theme") === "dark"
+        || (!root.getAttribute("data-theme") && matchMedia("(prefers-color-scheme: dark)").matches);
+      var next = isDark ? "light" : "dark";
+      root.setAttribute("data-theme", next);
+      try { localStorage.setItem("evie-theme", next); } catch (e) {}
+    });
+  })();
+
+  // Reveal on scroll.
+  (function () {
+    var els = document.querySelectorAll(".reveal");
+    if (!("IntersectionObserver" in window)) { els.forEach(function (e) { e.classList.add("in"); }); return; }
+    var io = new IntersectionObserver(function (entries) {
+      entries.forEach(function (en) { if (en.isIntersecting) { en.target.classList.add("in"); io.unobserve(en.target); } });
+    }, { threshold: 0.12 });
+    els.forEach(function (e) { io.observe(e); });
+  })();
+</script>
+</body>
+</html>

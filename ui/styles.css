@@ -1,0 +1,1283 @@
+/* ==========================================================================
+   Evie — notes for students.
+
+   Design rule, and the whole reason this app exists: ManageBac colours
+   everything, so nothing stands out. Here colour means exactly one thing —
+   how soon something is due. Everything else is greyscale. If a row is red,
+   it is late. If it is plain, it is fine. That is the entire legend.
+   ========================================================================== */
+
+:root {
+  /* Near-monochrome. The old palette leaned on soft pastel fills for every
+     state, which is what made it read as a school worksheet rather than a tool.
+     Colour is now reserved for status only; structure is carried by borders and
+     by weight. Primary actions are near-black rather than accent-coloured —
+     the convention in every application people take seriously. */
+  --paper: #fcfcfb;
+  --card: #ffffff;
+  --sunk: #f7f7f6;
+  --line: #e9e8e5;
+  --line-strong: #d8d7d3;
+
+  --ink: #14141a;
+  --ink-2: #4e4e57;
+  --ink-3: #79787f;
+  --ink-4: #a3a2a8;
+
+  --accent: #2c6a59;            /* status and links only, never decoration */
+  --accent-soft: #eef3f1;
+  --solid: #17171c;             /* primary buttons */
+  --solid-ink: #ffffff;
+
+  --late: #a8322a;
+  --late-soft: #fbf0ef;
+  --soon: #8a5a08;
+  --soon-soft: #fcf5e9;
+  --calm: #37639a;
+  --calm-soft: #eff3f8;
+
+  --sans: "Inter", -apple-system, "Segoe UI", system-ui, sans-serif;
+  --serif: "Iowan Old Style", "Palatino Linotype", Georgia, serif;
+  --mono: ui-monospace, "Cascadia Mono", Consolas, monospace;
+
+  --r: 6px;                     /* was 10px — large radii read as toy-like */
+  --r-sm: 4px;
+  --shadow: 0 1px 2px rgba(20,20,26,.04);
+  --shadow-lift: 0 1px 2px rgba(20,20,26,.06), 0 8px 20px rgba(20,20,26,.06);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --paper: #0e0e11; --card: #16161a; --sunk: #1c1c21;
+    --line: #26262c; --line-strong: #33333b;
+    --ink: #f2f1ef; --ink-2: #b6b5b1; --ink-3: #85847f; --ink-4: #5f5e5a;
+    --accent: #63b39b; --accent-soft: #16241f;
+    --solid: #f2f1ef; --solid-ink: #14141a;
+    --late: #e08279; --late-soft: #261817;
+    --soon: #cfa257; --soon-soft: #241d14;
+    --calm: #7ba6d4; --calm-soft: #161f2b;
+    --shadow: 0 1px 2px rgba(0,0,0,.4);
+    --shadow-lift: 0 1px 2px rgba(0,0,0,.4), 0 8px 20px rgba(0,0,0,.3);
+  }
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; }
+body {
+  background: var(--paper); color: var(--ink);
+  font-family: var(--sans); font-size: 14.5px; line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+}
+button, input, select, textarea { font: inherit; color: inherit; }
+button { cursor: pointer; background: none; border: none; }
+a { color: var(--accent); }
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-thumb { background: var(--line-strong); border-radius: 5px;
+  border: 3px solid var(--paper); }
+
+.hide { display: none !important; }
+
+/* --------------------------------------------------------- accessibility */
+/* Visible focus everywhere. The browser default is removed by many resets and
+   then never replaced, which makes the whole app unusable by keyboard. */
+:focus-visible {
+  outline: 2.5px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+:focus:not(:focus-visible) { outline: none; }
+
+/* Screen-reader-only text: present for assistive tech, invisible on screen. */
+.sr {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+}
+.sr-focus:focus {
+  position: fixed; top: 10px; left: 10px; z-index: 500;
+  width: auto; height: auto; clip: auto; margin: 0;
+  padding: 10px 16px; background: var(--accent); color: #fff; border-radius: 8px;
+}
+
+/* Respect the OS setting. Blinking record dots and sliding toasts are exactly
+   what this preference exists to stop. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: .001ms !important; animation-iteration-count: 1 !important;
+    transition-duration: .001ms !important; scroll-behavior: auto !important;
+  }
+}
+
+/* Windows high-contrast mode strips background colours; keep the borders. */
+@media (forced-colors: active) {
+  .btn, .pill, .stream, .item { border: 1px solid CanvasText; }
+  .item .bar { forced-color-adjust: none; }
+}
+
+ul.itemlist { list-style: none; margin: 0; padding: 0; }
+.item .main { display: block; flex: 1; min-width: 0; }
+.item a.t {
+  color: var(--ink); text-decoration: none; display: inline-block;
+}
+.item a.t:hover { text-decoration: underline; text-underline-offset: 2px; }
+.item .ext { font-size: 11px; color: var(--ink-4); margin-left: 5px; }
+.item a.t:hover .ext { color: var(--accent); }
+.mono { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+.muted { color: var(--ink-3); }
+.lbl { font-size: 11px; font-weight: 600; letter-spacing: .07em;
+  text-transform: uppercase; color: var(--ink-4); }
+
+/* ---------------------------------------------------------------- buttons */
+.btn {
+  display: inline-flex; align-items: center; gap: 7px;
+  padding: 8px 14px; border-radius: 8px; border: 1px solid var(--line-strong);
+  background: var(--card); color: var(--ink); font-size: 13.5px; font-weight: 500;
+  transition: background .12s, border-color .12s, transform .06s;
+}
+.btn:hover { background: var(--sunk); }
+.btn:active { transform: translateY(1px); }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+.btn.primary:hover { filter: brightness(1.08); }
+.btn.ghost { border-color: transparent; background: none; color: var(--ink-2); }
+.btn.ghost:hover { background: var(--sunk); }
+.btn.rec { background: var(--late); border-color: var(--late); color: #fff; }
+.btn.rec .dot { width: 9px; height: 9px; border-radius: 50%; background: #fff;
+  animation: blink 1.1s steps(2,start) infinite; }
+@keyframes blink { 50% { opacity: .2; } }
+.btn[disabled] { opacity: .45; cursor: not-allowed; }
+.btn.sm { padding: 5px 10px; font-size: 12.5px; }
+
+.pill {
+  display: inline-flex; align-items: center; gap: 5px; padding: 2px 8px;
+  border-radius: 999px; font-size: 11.5px; font-weight: 600;
+  background: var(--sunk); color: var(--ink-3); white-space: nowrap;
+}
+.pill.late { background: var(--late-soft); color: var(--late); }
+.pill.soon { background: var(--soon-soft); color: var(--soon); }
+.pill.calm { background: var(--calm-soft); color: var(--calm); }
+.pill.new  { background: var(--accent-soft); color: var(--accent); }
+
+/* ================================================================ onboarding */
+#onboard {
+  position: fixed; inset: 0; z-index: 100; overflow-y: auto;
+  background: var(--paper); display: grid; place-items: start center; padding: 6vh 20px;
+}
+.ob-card { width: min(620px, 100%); }
+.ob-card h1 { font-family: var(--serif); font-size: 34px; margin: 0 0 6px;
+  letter-spacing: -.02em; }
+.ob-card .sub { color: var(--ink-3); margin: 0 0 28px; font-size: 15px; }
+.field { margin-bottom: 18px; }
+.field label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 6px; }
+.field .help { font-size: 12.5px; color: var(--ink-3); margin-top: 5px; }
+.field input, .field select, .field textarea {
+  width: 100%; padding: 10px 12px; border-radius: 8px;
+  border: 1px solid var(--line-strong); background: var(--card); outline: none;
+}
+.field input:focus, .field select:focus, .field textarea:focus {
+  border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft);
+}
+.chips { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 8px; }
+.chip-toggle {
+  padding: 6px 12px; border-radius: 999px; border: 1px solid var(--line-strong);
+  background: var(--card); font-size: 13px;
+}
+.chip-toggle.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+.ob-actions { display: flex; gap: 10px; margin-top: 26px; align-items: center; }
+.steps { display: flex; gap: 6px; margin-bottom: 26px; }
+.steps i { height: 3px; flex: 1; background: var(--line); border-radius: 2px; }
+.steps i.on { background: var(--accent); }
+
+/* ===================================================================== shell */
+#app { display: grid; grid-template-columns: 264px 1fr; height: 100vh; }
+
+#side {
+  border-right: 1px solid var(--line); background: var(--sunk);
+  display: flex; flex-direction: column; min-height: 0;
+}
+.brand {
+  display: flex; align-items: center; gap: 9px; padding: 16px 18px 12px;
+}
+.brand .mark { width: 26px; height: 26px; border-radius: 8px; background: var(--accent);
+  display: grid; place-items: center; color: #fff; font-weight: 700; font-size: 14px; }
+.brand b { font-size: 16px; letter-spacing: -.01em; }
+.brand small { color: var(--ink-4); font-size: 11.5px; display: block; line-height: 1.2; }
+
+.nav { padding: 6px 10px; }
+.nav a {
+  display: flex; align-items: center; gap: 10px; padding: 8px 10px;
+  border-radius: 8px; color: var(--ink-2); text-decoration: none; font-size: 14px;
+}
+.nav a:hover { background: var(--card); }
+.nav a.on { background: var(--card); color: var(--ink); font-weight: 600;
+  box-shadow: var(--shadow); }
+.nav a .count { margin-left: auto; font-size: 12px; color: var(--ink-4); }
+.nav a .count.alert { color: var(--late); font-weight: 700; }
+
+.side-scroll { flex: 1; overflow-y: auto; padding: 8px 10px 16px; min-height: 0; }
+.side-head { display: flex; align-items: center; padding: 14px 10px 6px; }
+.side-head .lbl { flex: 1; }
+
+.note-row {
+  padding: 8px 10px; border-radius: 8px; cursor: pointer; display: block;
+  color: inherit; text-decoration: none;
+}
+.note-row .t, .note-row .m { display: block; }
+.note-row[aria-current="page"] { background: var(--card); box-shadow: var(--shadow); }
+.note-row:hover { background: var(--card); }
+.note-row.on { background: var(--card); box-shadow: var(--shadow); }
+.note-row .t { font-size: 13.5px; font-weight: 500; overflow: hidden;
+  text-overflow: ellipsis; white-space: nowrap; }
+.note-row .m { font-size: 11.5px; color: var(--ink-4); margin-top: 1px; }
+
+#side-foot { border-top: 1px solid var(--line); padding: 10px 14px; font-size: 12px;
+  color: var(--ink-4); display: flex; align-items: center; gap: 8px; }
+
+/* ====================================================================== main */
+#main { overflow-y: auto; min-height: 0; }
+.wrap { max-width: 860px; margin: 0 auto; padding: 34px 32px 120px; }
+.wrap.wide { max-width: 1080px; }
+
+.topbar {
+  position: sticky; top: 0; z-index: 20; background: var(--paper);
+  border-bottom: 1px solid var(--line);
+  display: flex; align-items: center; gap: 10px; padding: 11px 20px;
+}
+.topbar .grow { flex: 1; min-width: 0; }
+.topbar h2 { margin: 0; font-size: 15px; font-weight: 600; overflow: hidden;
+  text-overflow: ellipsis; white-space: nowrap; }
+.topbar .sub { font-size: 12px; color: var(--ink-4); }
+
+/* ------------------------------------------------------------- note editor */
+#title-input {
+  width: 100%; border: none; outline: none; background: none;
+  font-family: var(--serif); font-size: 33px; font-weight: 600;
+  letter-spacing: -.02em; margin-bottom: 4px; padding: 0;
+}
+#title-input::placeholder { color: var(--ink-4); }
+.note-meta { display: flex; gap: 8px; align-items: center; margin-bottom: 22px;
+  flex-wrap: wrap; }
+.note-meta input {
+  border: 1px solid transparent; background: var(--sunk); border-radius: 7px;
+  padding: 4px 9px; font-size: 12.5px; width: 150px; outline: none;
+}
+.note-meta input:focus { border-color: var(--line-strong); background: var(--card); }
+
+#body-input {
+  width: 100%; min-height: 180px; border: none; outline: none; resize: vertical;
+  background: none; font-family: var(--serif); font-size: 17px; line-height: 1.72;
+  color: var(--ink);
+}
+#body-input::placeholder { color: var(--ink-4); }
+
+/* ------------------------------------------------------------- note blocks */
+.blocks { margin-top: 30px; }
+.block { margin: 0 0 26px; }
+.block h3 {
+  font-size: 12px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase;
+  color: var(--ink-4); margin: 0 0 10px;
+}
+.block.summary p {
+  font-family: var(--serif); font-size: 18px; line-height: 1.65; margin: 0;
+  padding-left: 16px; border-left: 3px solid var(--accent); color: var(--ink-2);
+}
+.block ul { margin: 0; padding-left: 20px; }
+.block li { margin-bottom: 7px; font-size: 15.5px; line-height: 1.6; }
+
+.deflist { display: grid; gap: 1px; background: var(--line); border: 1px solid var(--line);
+  border-radius: var(--r); overflow: hidden; }
+.deflist div { background: var(--card); padding: 11px 14px; display: grid;
+  grid-template-columns: 190px 1fr; gap: 14px; }
+.deflist b { font-weight: 600; }
+@media (max-width: 640px) { .deflist div { grid-template-columns: 1fr; gap: 2px; } }
+
+.formula {
+  background: var(--card); border: 1px solid var(--line); border-radius: var(--r);
+  padding: 16px 18px; box-shadow: var(--shadow);
+}
+.formula .f { font-family: var(--mono); font-size: 19px; text-align: center;
+  padding: 6px 0 12px; letter-spacing: .01em; }
+.formula .m { font-size: 14px; color: var(--ink-2); }
+.formula .w { font-size: 12.5px; color: var(--ink-4); margin-top: 6px; }
+
+.example { background: var(--card); border: 1px solid var(--line);
+  border-radius: var(--r); padding: 16px 18px; box-shadow: var(--shadow); }
+.example .t { font-weight: 600; margin-bottom: 10px; }
+.example ol { margin: 0; padding-left: 20px; }
+.example li { margin-bottom: 8px; }
+
+.callout {
+  border-radius: var(--r); padding: 14px 16px; border: 1px solid var(--line);
+  background: var(--card);
+}
+.callout.assessed { border-color: color-mix(in srgb, var(--calm) 34%, var(--line));
+  background: var(--calm-soft); }
+.callout.gaps { border-color: color-mix(in srgb, var(--soon) 34%, var(--line));
+  background: var(--soon-soft); }
+.callout ul { padding-left: 18px; margin: 6px 0 0; }
+.callout li { font-size: 14.5px; }
+
+.diagram-wrap {
+  background: var(--card); border: 1px solid var(--line); border-radius: var(--r);
+  padding: 14px; box-shadow: var(--shadow); overflow-x: auto;
+}
+.diagram-wrap svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+.diagram-wrap .cap { text-align: center; font-size: 12.5px; color: var(--ink-4);
+  margin-top: 8px; }
+
+/* ------------------------------------------------------------ record strip */
+#recbar {
+  position: sticky; bottom: 0; z-index: 25; margin: 0 -32px -120px;
+  padding: 12px 32px 16px;
+  background: linear-gradient(180deg, transparent, var(--paper) 30%);
+}
+.recpanel {
+  display: flex; align-items: center; gap: 14px; padding: 12px 14px;
+  background: var(--card); border: 1px solid var(--line-strong);
+  border-radius: 12px; box-shadow: var(--shadow);
+}
+.recpanel .grow { flex: 1; min-width: 0; }
+#bars { display: flex; align-items: flex-end; gap: 2px; height: 22px; width: 52px; }
+#bars i { flex: 1; background: var(--line-strong); border-radius: 1px; height: 3px;
+  transition: height .07s linear; }
+#bars.live i { background: var(--late); }
+#livecap { font-size: 13px; color: var(--ink-3); overflow: hidden;
+  text-overflow: ellipsis; white-space: nowrap; }
+.recstat { text-align: right; font-size: 12px; color: var(--ink-4); }
+.recstat b { display: block; font-size: 15px; color: var(--ink); font-weight: 600; }
+
+/* ================================================================ managebac */
+.mb-head { display: flex; align-items: flex-start; gap: 14px; margin-bottom: 8px; }
+.mb-head h1 { font-family: var(--serif); font-size: 30px; margin: 0 0 2px;
+  letter-spacing: -.02em; }
+
+.streamgrid { display: grid; grid-template-columns: repeat(2, minmax(0,1fr));
+  gap: 16px; margin-top: 22px; }
+@media (max-width: 900px) { .streamgrid { grid-template-columns: 1fr; } }
+
+.stream { background: var(--card); border: 1px solid var(--line);
+  border-radius: var(--r); overflow: hidden; box-shadow: var(--shadow); }
+.stream > header {
+  display: flex; align-items: center; gap: 9px; padding: 12px 15px;
+  border-bottom: 1px solid var(--line);
+}
+.stream > header b { font-size: 14px; }
+.stream > header .n { margin-left: auto; font-size: 12.5px; color: var(--ink-4); }
+
+.item { display: flex; gap: 12px; padding: 11px 15px; border-top: 1px solid var(--line); }
+.item:first-of-type { border-top: none; }
+.item .bar { width: 3px; border-radius: 2px; background: var(--line-strong); flex: none; }
+.item.late .bar { background: var(--late); }
+.item.soon .bar { background: var(--soon); }
+.item .main { flex: 1; min-width: 0; }
+.item .t { font-size: 14px; font-weight: 500; }
+.item .m { font-size: 12.5px; color: var(--ink-4); margin-top: 2px;
+  display: flex; gap: 7px; flex-wrap: wrap; align-items: center; }
+.item .act { flex: none; }
+.empty { padding: 18px 15px; color: var(--ink-4); font-size: 13.5px; }
+
+.urgent-strip { border: 1px solid var(--late); background: var(--late-soft);
+  border-radius: var(--r); padding: 14px 16px; margin-bottom: 18px; }
+.urgent-strip b { color: var(--late); }
+.urgent-strip ul { margin: 8px 0 0; padding-left: 18px; }
+
+/* ====================================================================== ask */
+#askdock {
+  position: fixed; right: 22px; bottom: 22px; z-index: 40;
+  width: min(430px, calc(100vw - 44px));
+}
+#askdock.open .panel { display: flex; }
+#askdock .panel {
+  display: none; flex-direction: column; max-height: min(70vh, 620px);
+  background: var(--card); border: 1px solid var(--line-strong);
+  border-radius: 14px; box-shadow: 0 12px 40px rgba(28,27,25,.16); overflow: hidden;
+  margin-bottom: 10px;
+}
+#askdock header { display: flex; align-items: center; gap: 8px; padding: 12px 14px;
+  border-bottom: 1px solid var(--line); }
+#asklog { overflow-y: auto; padding: 14px; flex: 1; }
+#askform { display: flex; gap: 8px; padding: 10px; border-top: 1px solid var(--line); }
+#askinput { flex: 1; border: 1px solid var(--line-strong); border-radius: 9px;
+  padding: 9px 11px; outline: none; background: var(--paper); }
+#askinput:focus { border-color: var(--accent); }
+.qa { margin-bottom: 16px; }
+.qa .q { font-weight: 600; margin-bottom: 6px; }
+.qa .a { font-size: 14px; line-height: 1.6; }
+.qa .a p { margin: 0 0 9px; }
+.qa .a code { font-family: var(--mono); font-size: 13px; background: var(--sunk);
+  padding: 1px 5px; border-radius: 4px; }
+.qa .src { margin-top: 8px; display: flex; gap: 6px; flex-wrap: wrap; }
+#askfab {
+  margin-left: auto; display: flex; align-items: center; gap: 8px;
+  padding: 11px 17px; border-radius: 999px; background: var(--accent); color: #fff;
+  box-shadow: 0 6px 20px rgba(47,111,94,.35); font-weight: 600; font-size: 14px;
+}
+
+/* =================================================================== toast */
+#toast {
+  position: fixed; left: 50%; transform: translate(-50%, 12px); bottom: 24px;
+  z-index: 200; padding: 11px 17px; border-radius: 10px; font-size: 13.5px;
+  background: var(--ink); color: var(--paper); opacity: 0; pointer-events: none;
+  transition: opacity .18s, transform .18s; max-width: min(520px, 92vw);
+  box-shadow: 0 10px 30px rgba(0,0,0,.22);
+}
+#toast.show { opacity: 1; transform: translate(-50%, 0); }
+#toast.bad { background: var(--late); }
+
+@media (max-width: 820px) {
+  #app { grid-template-columns: 1fr; }
+  #side { display: none; }
+  .wrap { padding: 24px 18px 120px; }
+  #recbar { margin: 0 -18px -120px; padding: 12px 18px 16px; }
+}
+
+/* ==========================================================================
+   Timetable, the now-strip, and the bit of life the rest of the app was
+   missing. Colour still means urgency — but a subject now carries a stable
+   hue of its own so the week is scannable at a glance, which is a different
+   job from "this is late".
+   ========================================================================== */
+.subject-dot {
+  width: 10px; height: 10px; border-radius: 3px; flex: none;
+  background: var(--sub, var(--ink-4));
+}
+
+/* Bottom LEFT, not centre.
+
+   Centred, this sat directly on top of the note text box — you could not see
+   what you were typing. Bottom right is taken by Ask Evie. It is a glance, not
+   a control, so it is also click-through: even where it overlaps something,
+   the thing underneath still works. */
+#nowstrip {
+  position: fixed; left: 16px; bottom: 16px;
+  z-index: 45; display: flex; align-items: center; gap: 10px;
+  padding: 7px 13px; border-radius: 999px;
+  background: var(--card); color: var(--ink-2);
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow-lift);
+  font-size: 12.5px; max-width: min(340px, calc(100vw - 32px));
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  pointer-events: none;
+  opacity: .96;
+}
+#nowstrip b { color: var(--ink); }
+/* On a narrow screen the sidebar collapses, so keep it clear of the edge. */
+@media (max-width: 760px) {
+  #nowstrip { left: 12px; bottom: 12px; max-width: calc(100vw - 90px); }
+}
+#nowstrip.hide { display: none; }
+#nowstrip .ring { width: 30px; height: 30px; flex: none; }
+#nowstrip b { font-weight: 600; }
+#nowstrip .nxt { opacity: .72; }
+
+.tt-grid {
+  display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  margin-top: 18px;
+}
+.tt-day {
+  background: var(--card); border: 1px solid var(--line); border-radius: var(--r);
+  overflow: hidden; box-shadow: var(--shadow);
+  transition: transform .14s ease, box-shadow .14s ease;
+}
+.tt-day:hover { transform: translateY(-2px);
+  box-shadow: 0 2px 4px rgba(28,27,25,.06), 0 14px 34px rgba(28,27,25,.10); }
+.tt-day.today { border-color: var(--accent); }
+.tt-day > header {
+  padding: 10px 13px; border-bottom: 1px solid var(--line);
+  display: flex; align-items: center; gap: 8px;
+  font-size: 12px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase;
+  color: var(--ink-3);
+}
+.tt-day.today > header { color: var(--accent); background: var(--accent-soft); }
+.tt-p {
+  display: flex; gap: 10px; padding: 9px 13px; border-top: 1px solid var(--line);
+  align-items: flex-start;
+}
+.tt-p:first-of-type { border-top: none; }
+.tt-p.live { background: var(--accent-soft); }
+.tt-p .tm { font-family: var(--mono); font-size: 11.5px; color: var(--ink-4);
+  min-width: 42px; }
+.tt-p .sj { font-size: 13.5px; font-weight: 500; }
+.tt-p .rm { font-size: 11.5px; color: var(--ink-4); }
+
+.drop {
+  border: 2px dashed var(--line-strong); border-radius: var(--r);
+  padding: 34px 20px; text-align: center; color: var(--ink-3);
+  transition: border-color .15s, background .15s; cursor: pointer;
+}
+.drop:hover, .drop.over { border-color: var(--accent); background: var(--accent-soft); }
+.drop b { color: var(--ink); display: block; margin-bottom: 4px; font-size: 15px; }
+.drop img { max-width: 100%; max-height: 260px; border-radius: 8px; margin-top: 12px; }
+
+.stat-row { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(150px,1fr));
+  margin-bottom: 4px; }
+.stat-card {
+  background: var(--card); border: 1px solid var(--line); border-radius: var(--r);
+  padding: 14px 16px; box-shadow: var(--shadow);
+  transition: transform .14s ease;
+}
+.stat-card:hover { transform: translateY(-2px); }
+.stat-card .k { font-size: 11px; font-weight: 700; letter-spacing: .07em;
+  text-transform: uppercase; color: var(--ink-4); }
+.stat-card .v { font-family: var(--mono); font-size: 26px; margin-top: 5px; }
+.stat-card .s { font-size: 12px; color: var(--ink-3); margin-top: 2px; }
+.stat-card.alert .v { color: var(--late); }
+
+/* Rows and cards arrive rather than snapping in. Disabled under
+   prefers-reduced-motion by the global rule above. */
+@keyframes rise { from { opacity: 0; transform: translateY(6px); } }
+.stream, .tt-day, .stat-card, .block { animation: rise .22s ease both; }
+.stream:nth-child(2), .tt-day:nth-child(2) { animation-delay: .04s; }
+.stream:nth-child(3), .tt-day:nth-child(3) { animation-delay: .08s; }
+.stream:nth-child(4), .tt-day:nth-child(4) { animation-delay: .12s; }
+.tt-day:nth-child(5) { animation-delay: .16s; }
+
+.item { transition: background .12s; }
+.item:hover { background: var(--sunk); }
+.nav a { transition: background .12s, color .12s; }
+
+/* ------------------------------------------------------------- sign-in gate */
+#gate { position: fixed; inset: 0; z-index: 200; display: grid; place-items: center;
+  background: var(--paper); padding: 24px; }
+#gate.hide { display: none; }
+.gate-card { width: min(400px, 100%); text-align: center; }
+.gate-mark { width: 54px; height: 54px; border-radius: 15px; background: var(--accent);
+  color: #fff; display: grid; place-items: center; font-size: 27px; font-weight: 700;
+  margin: 0 auto 18px; }
+.gate-card h1 { font-family: var(--serif); font-size: 33px; margin: 0 0 6px; }
+.gate-card .sub { color: var(--ink-3); margin: 0 0 26px; }
+.btn.gsi { width: 100%; justify-content: center; padding: 12px; font-size: 15px; }
+.gate-err { color: var(--late); font-size: 13px; margin-top: 14px; }
+.gate-note { font-size: 12.5px; margin-top: 18px; }
+
+/* ------------------------------------------------------------------- tabs */
+.tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--line);
+  margin-bottom: 4px; }
+.tab {
+  padding: 10px 15px; font-size: 14px; font-weight: 500; color: var(--ink-3);
+  border-bottom: 2px solid transparent; margin-bottom: -1px;
+  display: flex; align-items: center; gap: 7px; transition: color .12s;
+}
+.tab:hover { color: var(--ink); }
+.tab.on { color: var(--accent); border-bottom-color: var(--accent); font-weight: 600; }
+.tab-n { font-size: 11.5px; background: var(--sunk); color: var(--ink-3);
+  border-radius: 999px; padding: 1px 7px; font-weight: 600; }
+.tab.on .tab-n { background: var(--accent-soft); color: var(--accent); }
+
+/* One obvious control instead of a wall of explanation. */
+.grab-box {
+  display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+  margin-top: 20px; padding: 16px 18px; border-radius: var(--r);
+  border: 1px solid var(--line); background: var(--card); box-shadow: var(--shadow);
+}
+.grab-copy { flex: 1; min-width: 220px; }
+.grab-copy b { display: block; margin-bottom: 3px; }
+.grab-copy span { font-size: 13px; color: var(--ink-3); }
+.grab-btn { text-decoration: none; cursor: grab; white-space: nowrap; }
+.grab-btn:active { cursor: grabbing; }
+
+.subj-pick {
+  border: 1px solid var(--line-strong); background: var(--card);
+  border-radius: 7px; padding: 4px 7px; font-size: 12px; color: var(--ink-2);
+  max-width: 150px; margin-right: 6px;
+}
+.subj-pick:hover { border-color: var(--accent); }
+.item .act { display: flex; align-items: center; gap: 4px; }
+
+/* Live coaching during a recording. Silent when all is well. */
+.coach {
+  display: flex; flex-direction: column; gap: 2px;
+  padding: 11px 15px; border-radius: 11px; margin-bottom: 9px;
+  border: 1px solid var(--line-strong); background: var(--card);
+  box-shadow: var(--shadow); animation: rise .2s ease both;
+}
+.coach.hide { display: none; }
+.coach b { font-size: 13.5px; }
+.coach span { font-size: 12.5px; color: var(--ink-3); }
+.coach.ok { border-color: color-mix(in srgb, var(--accent) 40%, var(--line)); }
+.coach.ok b { color: var(--accent); }
+.coach.soon { border-color: color-mix(in srgb, var(--soon) 45%, var(--line));
+  background: var(--soon-soft); }
+.coach.soon b { color: var(--soon); }
+.coach.late { border-color: var(--late); background: var(--late-soft); }
+.coach.late b { color: var(--late); }
+
+/* ------------------------------------------------------------------ notes
+   Obsidian's visual grammar: coloured callout boxes with an icon and a title,
+   and sub-points that are visibly subordinate. Without the indent rule a note
+   reads as one flat wall, which is the difference between these notes and a
+   hand-made one. */
+
+.block ul, .block ol { margin: 6px 0 10px; padding-left: 22px; }
+.block li { margin: 3px 0; line-height: 1.62; }
+.block ul.sub { margin: 2px 0 4px; padding-left: 20px; }
+/* Sub-levels step down in weight, the way an outline should read. */
+.block ul.sub > li { color: var(--ink-2); font-size: 14.5px; }
+.block ul.sub ul.sub > li { color: var(--ink-3); font-size: 14px; }
+.block ul > li::marker { color: var(--ink-4); }
+.block ul.sub > li::marker { content: '◦  '; }
+.block ul.sub ul.sub > li::marker { content: '·  '; }
+.block h4 { margin: 16px 0 4px; font-size: 14px; letter-spacing: .01em;
+            color: var(--ink-2); }
+
+.cal {
+  margin: 12px 0; border-radius: 8px; overflow: hidden;
+  border: 1px solid var(--cal-line, var(--line));
+  border-left: 4px solid var(--cal-edge, var(--ink-4));
+  background: var(--cal-fill, var(--paper-2, transparent));
+}
+.cal-h {
+  display: flex; align-items: baseline; gap: 8px;
+  padding: 9px 13px 7px; font-weight: 620; font-size: 14px;
+  color: var(--cal-edge, var(--ink));
+}
+.cal-i { font-size: 13px; line-height: 1; }
+.cal-b { padding: 0 13px 11px 34px; }
+.cal-b p { margin: 3px 0; line-height: 1.6; color: var(--ink-2); font-size: 14.5px; }
+
+.cal.warning { --cal-edge: #b4342a; --cal-fill: #fdf1ef; --cal-line: #f2d6d1; }
+.cal.tip     { --cal-edge: #2f6f5e; --cal-fill: #ecf5f2; --cal-line: #d3e7e0; }
+.cal.example { --cal-edge: #7a5cc4; --cal-fill: #f3eefc; --cal-line: #e0d5f5; }
+.cal.info, .cal.note, .cal.todo {
+                --cal-edge: #2b6098; --cal-fill: #eef3fa; --cal-line: #d3e0ef; }
+/* A quote is the teacher's own words — the highest-value thing in the note, so
+   it gets the serif treatment rather than another coloured box. */
+.cal.quote {
+  --cal-edge: var(--accent); --cal-fill: var(--accent-soft);
+  --cal-line: var(--line);
+}
+.cal.quote .cal-b p {
+  font-family: Georgia, 'Iowan Old Style', serif; font-size: 15.5px;
+  color: var(--ink); font-style: italic;
+}
+
+@media (prefers-color-scheme: dark) {
+  .cal.warning { --cal-fill: #2a1a18; --cal-line: #4a2a26; --cal-edge: #e0796d; }
+  .cal.tip     { --cal-fill: #16241f; --cal-line: #27403a; --cal-edge: #6fbfa5; }
+  .cal.example { --cal-fill: #201b2c; --cal-line: #362d4a; --cal-edge: #b199e8; }
+  .cal.info, .cal.note, .cal.todo {
+                 --cal-fill: #172230; --cal-line: #2a3b50; --cal-edge: #7fb0e0; }
+}
+
+.task-line { margin: 5px 0; color: var(--ink-2); font-size: 14.5px; }
+
+/* Clipboard needs a secure context; when it is refused, show the markdown in a
+   box the student can select rather than failing with nothing on screen. */
+.copy-fallback {
+  position: fixed; inset: 8% 12%; z-index: 999; width: 76%; height: 84%;
+  padding: 18px; border-radius: 10px; border: 1px solid var(--line-strong);
+  background: var(--paper); color: var(--ink); font: 13px/1.5 ui-monospace,
+  'SF Mono', Menlo, monospace; box-shadow: 0 24px 70px rgba(0,0,0,.3);
+}
+
+/* ==========================================================================
+   Calendar, school-email state, and notification streams.
+
+   Built from the tokens already defined above rather than new colours, so
+   these read as part of the same app instead of three pasted-in widgets.
+   ========================================================================== */
+
+/* --- school email state line ------------------------------------------- */
+.mail-state {
+  font-size: 13px;
+  color: var(--ink-3);
+  padding: 8px 11px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--sunk);
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.mail-state::before {
+  content: "";
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  background: var(--ink-4);
+  flex: none;
+}
+.mail-state.on { color: var(--accent); border-color: var(--accent-soft); background: var(--accent-soft); }
+.mail-state.on::before { background: var(--accent); }
+.mail-state.bad { color: var(--late); border-color: var(--late-soft); background: var(--late-soft); }
+.mail-state.bad::before { background: var(--late); }
+
+/* --- calendar ----------------------------------------------------------- */
+.cal-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 1px;
+  background: var(--line);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  overflow: hidden;
+  margin-top: 18px;
+}
+.cal-dow {
+  background: var(--sunk);
+  color: var(--ink-3);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  padding: 9px 10px;
+  text-align: left;
+}
+.cal-cell {
+  background: var(--card);
+  border: 0;
+  min-height: 104px;
+  padding: 8px 9px;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  position: relative;
+  transition: background .15s ease;
+}
+.cal-cell:hover { background: var(--sunk); }
+.cal-cell.empty { background: var(--sunk); cursor: default; opacity: .5; }
+.cal-cell .n {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink-2);
+  font-variant-numeric: tabular-nums;
+}
+.cal-cell.today .n {
+  background: var(--accent);
+  color: #fff;
+  border-radius: 50%;
+  width: 22px; height: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin: -2px 0 1px -2px;
+}
+/* The picked day is marked with an inset ring, not a fill: a filled cell
+   fights with the "today" marker and with the deadline colours inside it. */
+.cal-cell.picked { box-shadow: inset 0 0 0 2px var(--accent); }
+.cal-cell.overdue { background: var(--late-soft); }
+.cal-cell.overdue:hover { background: var(--late-soft); filter: brightness(.98); }
+
+.cal-cell .dot {
+  position: absolute;
+  top: 10px; right: 9px;
+  width: 6px; height: 6px;
+  border-radius: 50%;
+}
+.cal-cell .dot.due { background: var(--soon); }
+.cal-cell.overdue .dot.due { background: var(--late); }
+.cal-cell .lessons {
+  position: absolute;
+  top: 9px; right: 20px;
+  font-size: 10px;
+  color: var(--ink-4);
+  font-variant-numeric: tabular-nums;
+}
+.cal-cell .mini {
+  font-size: 11px;
+  line-height: 1.35;
+  color: var(--ink-2);
+  background: var(--soon-soft);
+  border-left: 2px solid var(--soon);
+  padding: 2px 5px;
+  border-radius: 3px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cal-cell.overdue .mini { background: var(--late-soft); border-left-color: var(--late); }
+.cal-cell .mini.more {
+  background: none;
+  border-left-color: transparent;
+  color: var(--ink-4);
+  padding-left: 7px;
+}
+
+@media (max-width: 720px) {
+  .cal-cell { min-height: 62px; padding: 6px; }
+  .cal-cell .mini { display: none; }
+  .cal-dow { padding: 7px 6px; font-size: 10px; }
+}
+
+/* --- a row that needs attention ---------------------------------------- */
+.item.hot { background: var(--late-soft); }
+.item.hot .bar { background: var(--late); }
+
+/* ==========================================================================
+   Refinement layer.
+
+   The brief was "professional, not kiddish". Concretely that meant four
+   things, each fixed below:
+
+     1. Colour was doing decoration. Pastel fills on every state made the page
+        look like a worksheet. Colour is now status-only; borders and weight
+        carry structure.
+     2. Primary actions were accent-green. Serious tools use near-black.
+     3. Type had many sizes and little hierarchy. Now: fewer sizes, real weight
+        contrast, tabular numerals, tightened tracking on headings.
+     4. Everything was loosely spaced and softly rounded. Tighter, squarer,
+        denser — more information per screen, which is what a student wants.
+   ========================================================================== */
+
+/* --- type ---------------------------------------------------------------- */
+body { font-size: 14px; letter-spacing: -0.006em; }
+
+h1, h2, h3, h4 {
+  letter-spacing: -0.018em;
+  color: var(--ink);
+  font-weight: 600;
+}
+.topbar h2 { font-size: 17px; line-height: 1.25; }
+.topbar .sub {
+  font-size: 12.5px;
+  color: var(--ink-3);
+  margin-top: 2px;
+  letter-spacing: 0;
+}
+
+/* Numbers line up in columns — dates, counts, times. */
+.item .m, .chip, .count, .cal-cell .n, .tab-n, .mini { font-variant-numeric: tabular-nums; }
+
+/* --- buttons ------------------------------------------------------------- */
+.btn {
+  border-radius: var(--r-sm);
+  border: 1px solid var(--line-strong);
+  background: var(--card);
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: -0.004em;
+  padding: 6px 11px;
+  transition: background .12s ease, border-color .12s ease, opacity .12s ease;
+  box-shadow: var(--shadow);
+}
+.btn:hover { background: var(--sunk); border-color: var(--line-strong); }
+.btn:active { transform: translateY(0.5px); }
+.btn[disabled] { opacity: .5; cursor: default; }
+
+/* Primary is near-black, not coloured. This single change does more for
+   "looks professional" than anything else here. */
+.btn.primary {
+  background: var(--solid);
+  color: var(--solid-ink);
+  border-color: var(--solid);
+  font-weight: 550;
+}
+.btn.primary:hover { background: var(--solid); opacity: .88; }
+
+.btn.ghost {
+  background: none;
+  border-color: transparent;
+  color: var(--ink-2);
+  box-shadow: none;
+}
+.btn.ghost:hover { background: var(--sunk); color: var(--ink); }
+.btn.sm { padding: 4px 9px; font-size: 12.5px; }
+
+/* --- navigation ---------------------------------------------------------- */
+.nav a {
+  border-radius: var(--r-sm);
+  font-size: 13.5px;
+  font-weight: 450;
+  letter-spacing: -0.004em;
+  color: var(--ink-2);
+}
+.nav a.on {
+  background: var(--sunk);
+  color: var(--ink);
+  font-weight: 550;
+  box-shadow: inset 2px 0 0 var(--ink);
+}
+
+/* --- section headings ---------------------------------------------------- */
+/* Small, uppercase, quiet — a label, not a shout. */
+.tier-head {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding-bottom: 7px;
+  border-bottom: 1px solid var(--line);
+}
+.tier-head .t {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: .07em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+.tier-head .chip {
+  font-size: 11px;
+  font-weight: 550;
+  color: var(--ink-3);
+  background: var(--sunk);
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  padding: 0 6px;
+  line-height: 17px;
+}
+
+/* --- rows ---------------------------------------------------------------- */
+.item { padding: 10px 14px; gap: 11px; align-items: flex-start; }
+.item .t { font-size: 13.5px; font-weight: 500; }
+.item .m {
+  font-size: 12px;
+  color: var(--ink-3);
+  display: block;
+  margin-top: 2px;
+}
+.item:hover { background: var(--sunk); }
+/* The status bar is a hairline, not a stripe. */
+.item .bar { width: 2px; border-radius: 1px; flex: none; align-self: stretch; }
+
+/* --- pills --------------------------------------------------------------- */
+/* Outlined, not filled. Filled pastel badges were the single most "kiddish"
+   element on the page. */
+.pill {
+  display: inline-flex;
+  align-items: center;
+  font-size: 10.5px;
+  font-weight: 550;
+  letter-spacing: .03em;
+  text-transform: uppercase;
+  padding: 1px 6px;
+  border-radius: 3px;
+  border: 1px solid var(--line-strong);
+  background: none;
+  color: var(--ink-3);
+  vertical-align: 1px;
+}
+.pill.new    { border-color: var(--accent); color: var(--accent); }
+.pill.overdue, .pill.late { border-color: var(--late); color: var(--late); }
+.pill.today, .pill.soon   { border-color: var(--soon); color: var(--soon); }
+
+/* --- callouts ------------------------------------------------------------ */
+/* A left rule and a quiet heading. No fill, no emoji-sized icon. */
+.cal {
+  border: 1px solid var(--line);
+  border-left: 2px solid var(--line-strong);
+  border-radius: var(--r-sm);
+  background: var(--card);
+  padding: 11px 14px;
+  margin: 14px 0;
+}
+.cal .cal-h {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: .01em;
+  color: var(--ink-2);
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-bottom: 5px;
+}
+.cal .cal-i { font-size: 12px; line-height: 1; opacity: .8; }
+.cal .cal-b { font-size: 13px; color: var(--ink-2); }
+.cal .cal-b p { margin: 5px 0; }
+.cal.warning { border-left-color: var(--soon); }
+.cal.warning .cal-h { color: var(--soon); }
+.cal.tip     { border-left-color: var(--accent); }
+.cal.tip .cal-h { color: var(--accent); }
+.cal.quote   { border-left-color: var(--ink-4); }
+.cal.quote .cal-b { font-family: var(--serif); font-size: 14px; }
+.cal.info, .cal.note { border-left-color: var(--calm); }
+.cal.info .cal-h, .cal.note .cal-h { color: var(--calm); }
+
+/* --- cards and inputs ---------------------------------------------------- */
+.card, .block, .drop, .grab-box { border-radius: var(--r); }
+input, select, textarea {
+  border-radius: var(--r-sm);
+  border: 1px solid var(--line-strong);
+  background: var(--card);
+  padding: 7px 10px;
+  font-size: 13.5px;
+}
+input:focus, select:focus, textarea:focus {
+  outline: none;
+  border-color: var(--ink-3);
+  box-shadow: 0 0 0 3px var(--sunk);
+}
+.field label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  display: block;
+  margin-bottom: 5px;
+}
+.help { font-size: 12.5px; color: var(--ink-3); line-height: 1.5; margin-top: 6px; }
+
+/* --- calendar, tightened to match --------------------------------------- */
+.cal-grid { border-radius: var(--r); margin-top: 16px; }
+.cal-cell { min-height: 96px; }
+.cal-cell .n { font-size: 12px; font-weight: 550; color: var(--ink-3); }
+.cal-cell.today .n { background: var(--solid); color: var(--solid-ink); font-weight: 600; }
+.cal-cell.picked { box-shadow: inset 0 0 0 1.5px var(--ink-3); }
+.cal-cell.overdue { background: var(--card); }
+.cal-cell.overdue .n { color: var(--late); }
+.cal-cell .mini {
+  font-size: 10.5px;
+  background: none;
+  border-left: 2px solid var(--soon);
+  color: var(--ink-2);
+  padding: 1px 0 1px 6px;
+  border-radius: 0;
+}
+.cal-cell.overdue .mini { border-left-color: var(--late); }
+.cal-dow { font-size: 10px; letter-spacing: .08em; padding: 8px 9px; }
+
+/* --- misc ---------------------------------------------------------------- */
+.mail-state { border-radius: var(--r-sm); font-size: 12.5px; }
+.tab { font-size: 13px; font-weight: 500; letter-spacing: -0.004em; }
+.tab.on { font-weight: 600; }
+.item.hot { background: none; }
+.item.hot .bar { background: var(--late); }
+.item.hot .t { color: var(--ink); }
+
+/* --- account row --------------------------------------------------------- */
+.acct {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  background: var(--sunk);
+  padding: 7px 9px 7px 11px;
+}
+.acct .who {
+  font-size: 13px;
+  color: var(--ink-2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The Ask panel expands to nearly the full width on a phone, which would put
+   it straight back on top of the now-strip. Yield to it while it is open. */
+body:has(#askdock.open) #nowstrip { display: none; }
+
+/* ==========================================================================
+   REDESIGN — structure, not paint.
+
+   The previous pass changed colours and corner radii and left everything else
+   where it was, which is why it looked unchanged. Colour is the last 10% of
+   how a page reads; the first 90% is type scale, spacing rhythm, measure and
+   density. Those are what change here.
+
+   Reference register: Notion and Linear — a quiet chrome that gets out of the
+   way, and content set like something you would actually sit and read.
+   ========================================================================== */
+
+/* --- 1. Reading a note ---------------------------------------------------
+   The whole point of the app. It was set at 14px sans, full width, tight
+   leading — laid out like a settings dialog rather than a page of notes. */
+.wrap { max-width: 780px; padding: 40px 40px 140px; }
+.wrap.wide { max-width: 1120px; }
+
+.block { margin: 0 0 30px; }
+
+/* Notes are read, not scanned. Serif, a real measure, generous leading. */
+.block.points ul,
+.block.points ol,
+.block.summary p {
+  font-family: var(--serif);
+  font-size: 16.5px;
+  line-height: 1.68;
+  color: var(--ink);
+  max-width: 68ch;
+}
+.block.points li { margin: 0 0 9px; }
+.block.points li::marker { color: var(--ink-4); }
+.block.points ul.sub {
+  margin: 8px 0 8px 4px;
+  padding-left: 20px;
+  border-left: 1px solid var(--line);
+}
+.block.points ul.sub li { font-size: 15.5px; color: var(--ink-2); margin-bottom: 6px; }
+
+/* Section headings: the spine of the note. Big enough to find by eye. */
+.block h3 {
+  font-size: 12px;
+  font-weight: 650;
+  letter-spacing: .09em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  margin: 0 0 14px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--line);
+}
+.block h4 {
+  font-family: var(--sans);
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.012em;
+  margin: 22px 0 8px;
+  color: var(--ink);
+}
+
+/* The lead paragraph reads as a standfirst, not as another bullet. */
+.block.summary p {
+  font-size: 18px;
+  line-height: 1.6;
+  color: var(--ink-2);
+  border-left: 2px solid var(--line-strong);
+  padding-left: 18px;
+  margin: 0;
+}
+
+/* --- 2. The shell --------------------------------------------------------
+   The sidebar was the same fill as a card, so nothing separated navigation
+   from content. Sink it, narrow it, quieten the type. */
+#side { background: var(--paper); border-right: 1px solid var(--line); }
+.brand { padding: 18px 16px 14px; gap: 11px; align-items: center; }
+.brand .mark {
+  width: 30px; height: 30px; border-radius: 50%;
+  background: var(--solid); color: var(--solid-ink);
+  font-size: 13px; font-weight: 600;
+  object-fit: cover;
+}
+.brand-who { min-width: 0; }
+.brand b {
+  display: block; font-size: 13.5px; font-weight: 600;
+  letter-spacing: -0.01em; color: var(--ink);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.brand small {
+  display: block; font-size: 11.5px; color: var(--ink-4);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+
+.nav { padding: 6px 8px; }
+.nav a {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 6px 10px; margin-bottom: 1px;
+  border-radius: 5px; font-size: 13px; font-weight: 450;
+  color: var(--ink-3); text-decoration: none;
+}
+.nav a:hover { background: var(--sunk); color: var(--ink); }
+.nav a.on {
+  background: var(--sunk); color: var(--ink); font-weight: 550;
+  box-shadow: none;
+}
+.nav .count { font-size: 11px; color: var(--ink-4); font-variant-numeric: tabular-nums; }
+
+/* --- 3. The page header --------------------------------------------------
+   It was a row of buttons with a title squeezed in. Give the title room and
+   let the actions sit quietly to the right. */
+.topbar {
+  padding: 26px 40px 18px;
+  border-bottom: 1px solid var(--line);
+  align-items: flex-start;
+  gap: 12px;
+  position: sticky; top: 0; z-index: 20;
+  background: color-mix(in oklab, var(--paper) 88%, transparent);
+  backdrop-filter: saturate(1.4) blur(10px);
+}
+.topbar h2 {
+  font-size: 21px; font-weight: 650; letter-spacing: -0.022em;
+  line-height: 1.2;
+}
+.topbar .sub { font-size: 12.5px; color: var(--ink-3); margin-top: 3px; }
+
+/* --- 4. Lists ------------------------------------------------------------
+   Rows were boxes with borders on every side. Hairline separators and a
+   hover wash read as a list; boxes read as a form. */
+.itemlist { border-top: 1px solid var(--line); }
+.item {
+  padding: 13px 12px;
+  border-top: none;
+  border-bottom: 1px solid var(--line);
+  border-radius: 0;
+  align-items: flex-start;
+}
+.item:hover { background: var(--sunk); }
+.item .t { font-size: 14px; font-weight: 500; letter-spacing: -0.008em; }
+.item .m { font-size: 12px; color: var(--ink-4); margin-top: 3px; }
+
+/* --- 5. Callouts ---------------------------------------------------------
+   Full-width tinted panels shouted. A hairline rule and a small label
+   whisper, which is what a marginal note should do. */
+.cal { padding: 2px 0 2px 16px; border: none; border-left: 2px solid var(--line-strong);
+       border-radius: 0; margin: 22px 0; background: none; }
+.cal .cal-h { font-size: 11px; letter-spacing: .07em; text-transform: uppercase;
+              margin-bottom: 6px; }
+.cal .cal-b { font-family: var(--serif); font-size: 15.5px; line-height: 1.6;
+              color: var(--ink-2); max-width: 64ch; }
+.cal.quote .cal-b { font-style: italic; color: var(--ink); }
+
+/* --- 6. Diagrams ---------------------------------------------------------
+   Give them air and centre the caption under the figure, like a textbook. */
+.diagram-wrap {
+  margin: 26px 0; padding: 22px;
+  background: var(--card); border: 1px solid var(--line);
+  border-radius: 8px;
+}
+.diagram-wrap .cap {
+  margin-top: 14px; text-align: center;
+  font-size: 12px; color: var(--ink-3);
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 760px) {
+  .wrap { padding: 24px 18px 120px; }
+  .topbar { padding: 18px 18px 14px; }
+  .block.points ul, .block.points ol { font-size: 16px; }
+}
+
+/* `hidden` loses to a class selector that sets display, so both the photo and
+   the fallback initial rendered at once — the "A" and "E" side by side. */
+.brand .mark[hidden] { display: none !important; }
+
+/* ==========================================================================
+   The Timetable language, applied everywhere.
+
+   That page worked because it is a dashboard: hard numbers in cards, colour
+   coded, panels with headers, mono figures. Every other page was a flat list
+   on a flat background. Same treatment throughout, so the app reads as one
+   product rather than one good page and five plain ones.
+   ========================================================================== */
+
+/* Lists become stacked cards, like the day columns on Timetable. */
+.itemlist {
+  border-top: none;
+  display: flex; flex-direction: column; gap: 8px;
+}
+.itemlist .item {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 13px 15px;
+  transition: transform .12s ease, border-color .12s ease;
+}
+.itemlist .item:hover {
+  background: var(--card);
+  border-color: var(--line-strong);
+  transform: translateY(-1px);
+}
+.itemlist .item .bar { border-radius: 2px; }
+
+/* Times, dates and counts in mono, as on the timetable. */
+.item .m, .pill, .chip { font-variant-numeric: tabular-nums; }
+.item .when, .item .time { font-family: var(--mono); font-size: 12px; }
+
+/* A subject dot, the timetable's colour key, reusable on any row. */
+.dot-subject {
+  width: 8px; height: 8px; border-radius: 50%;
+  display: inline-block; margin-right: 7px; flex: none;
+  background: var(--accent);
+}
+
+/* Section headers get the panel-header treatment instead of a bare rule. */
+.tier-head {
+  background: var(--sunk);
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  padding: 9px 13px;
+  margin-bottom: 10px;
+}
+
+/* The stat row already existed but only Timetable used it. Give it room. */
+.stat-row { margin-bottom: 22px; }
+.stat-card { border-radius: 9px; }

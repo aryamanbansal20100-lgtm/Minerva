@@ -41,3 +41,6 @@ scratch/
 
 # The project itself is the repo — a zip of it does not belong in git.
 *.zip
+
+# The project itself is the repo — a zip of it does not belong in git.
+*.zip

@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import mimetypes
+import os
 import re
 import traceback
 import urllib.error
@@ -1207,9 +1208,18 @@ def serve() -> None:
     # expect it on 0.0.0.0. Locally neither is set, so it stays on
     # 127.0.0.1:7400 — private to this machine, which is the right default for
     # a laptop. One rule, no config file to edit when deploying.
-    hosted_port = config.env("PORT", "")
+    # A hosting platform hands the process a $PORT and routes to it from
+    # outside the container, which only works if we listen on every interface.
+    #
+    # Read PORT from the real environment, never through config.env: that helper
+    # also loads the .env file, and run.py writes a starter .env containing
+    # EVIE_HOST=127.0.0.1 for local use. On the server that file did not exist
+    # until the process itself created it — so the template's 127.0.0.1 won,
+    # the app bound to localhost inside the container, and Render's router had
+    # nothing to reach. The deploy looked healthy and the site never answered.
+    hosted_port = os.environ.get("PORT", "").strip()
     if hosted_port:
-        host = config.env("EVIE_HOST", "0.0.0.0")
+        host = "0.0.0.0"                      # not negotiable when hosted
         port = int(hosted_port)
     else:
         host = config.env("EVIE_HOST", "127.0.0.1")

@@ -597,6 +597,46 @@ class Handler(SimpleHTTPRequestHandler):
             sync.delete_document(payload.get("id", ""))
             return self._json({"ok": store.delete_document(payload.get("id", ""))})
 
+        if path == "/api/backup/test":
+            """Write a probe document, read it back, delete it.
+
+            The only honest way to answer "is the cloud working". Rules cannot
+            be checked from outside — an unauthenticated probe is denied whether
+            the rules are correct or still the locked default — so the test has
+            to run as the signed-in student, from here, with their real token.
+            """
+            uid = store.uid()
+            if not cloud.enabled():
+                return self._json({"ok": False, "step": "config",
+                                   "message": "Cloud backup is switched off."})
+            if not cloud.token():
+                return self._json({"ok": False, "step": "auth",
+                                   "message": "Sign in with Google first."})
+            probe = {"hello": "minerva", "at": datetime.now().isoformat(timespec="seconds")}
+            wrote = cloud.put(uid, "diagnostics", "probe", probe)
+            if not wrote:
+                return self._json({
+                    "ok": False, "step": "write",
+                    "message": ("Firestore refused the write. If you published "
+                                "rules, check they went to Firestore and not "
+                                "Realtime Database."),
+                    "error": cloud.status().get("last_error", ""),
+                })
+            back = cloud.fetch(uid, "diagnostics", limit=5)
+            found = any(r.get("hello") == "minerva" for r in back)
+            cloud.delete(uid, "diagnostics", "probe")
+            if not found:
+                return self._json({
+                    "ok": False, "step": "read",
+                    "message": "Saved, but could not read it back.",
+                    "error": cloud.status().get("last_error", ""),
+                })
+            return self._json({
+                "ok": True, "step": "done",
+                "message": ("Cloud backup works. Your notes are saved to your "
+                            "Google account and will follow you to any device."),
+            })
+
         if path == "/api/assessment/add":
             try:
                 row = store.add_assessment(

@@ -246,6 +246,28 @@ export function SettingsPage({ state, refresh }: SettingsPageProps) {
      previously unknowable from inside the app: sync failures were swallowed,
      so a broken backup looked exactly like a working one. */
   const [backup, setBackup] = useState<BackupState | null>(null);
+  const [probe, setProbe] = useState<{ ok: boolean; message: string; error?: string } | null>(null);
+  const [probing, setProbing] = useState(false);
+
+  /* A real round trip: write a document, read it back, delete it. Rules cannot
+     be checked from outside — an unauthenticated probe is refused whether they
+     are correct or still the locked default — so the only honest test runs as
+     the signed-in student. */
+  const testBackup = useCallback(async () => {
+    setProbing(true);
+    setProbe(null);
+    try {
+      const out = await apiPost<{ ok: boolean; message: string; error?: string }>(
+        "/api/backup/test", {},
+      );
+      setProbe(out);
+      apiGet<BackupState>("/api/backup").then(setBackup).catch(() => {});
+    } catch (err) {
+      setProbe({ ok: false, message: err instanceof Error ? err.message : String(err) });
+    } finally {
+      setProbing(false);
+    }
+  }, []);
   useEffect(() => {
     let live = true;
     apiGet<BackupState>("/api/backup")
@@ -707,6 +729,26 @@ export function SettingsPage({ state, refresh }: SettingsPageProps) {
           {backup?.cloud?.last_error ? (
             <p className="mt-1.5 break-words text-[12px] text-late">
               {backup.cloud.last_error}
+            </p>
+          ) : null}
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={testBackup}
+              disabled={probing}
+              className="btn-brand rounded-lg px-3 py-1.5 text-[13px] font-semibold disabled:opacity-60"
+            >
+              {probing ? "Testing…" : "Test cloud backup"}
+            </button>
+            {probe ? (
+              <span className={cn("text-[12.5px]", probe.ok ? "text-ok" : "text-late")}>
+                {probe.message}
+              </span>
+            ) : null}
+          </div>
+          {probe && !probe.ok && probe.error ? (
+            <p className="mt-1.5 break-words font-mono text-[11.5px] text-late">
+              {probe.error}
             </p>
           ) : null}
           <Help>

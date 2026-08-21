@@ -109,7 +109,30 @@ async function readJson<T>(response: Response): Promise<T> {
    backend — a long-running process with SQLite and the API keys — cannot, so it
    is hosted separately. Set VITE_API_BASE at build time to point at it, e.g.
    VITE_API_BASE=https://minerva-api.onrender.com  */
-const API_BASE = (import.meta.env.VITE_API_BASE || "").replace(/\/$/, "");
+const CONFIGURED_API = (import.meta.env.VITE_API_BASE || "").replace(/\/$/, "");
+
+/* Decided at RUNTIME, not at build time, so one build works everywhere.
+
+   Three places this same bundle runs, and each needs a different answer:
+
+     localhost          the Python server serves both -> relative "/api/..."
+     the API's own host  same -> relative, never a pointless round trip
+     Netlify             the app is static here and the API is elsewhere ->
+                         absolute, so calls reach the Python service
+
+   Baking the choice in at build time meant the file that worked on Netlify
+   broke on the laptop, and vice versa. */
+function resolveApiBase(): string {
+  if (!CONFIGURED_API) return "";
+  if (typeof window === "undefined") return "";
+  const { hostname, origin } = window.location;
+  const local = hostname === "localhost" || hostname === "127.0.0.1";
+  if (local) return "";                       // served by the Python process
+  if (origin === CONFIGURED_API) return "";   // we ARE the API host
+  return CONFIGURED_API;                      // static host: call out to the API
+}
+
+const API_BASE = resolveApiBase();
 
 function apiUrl(path: string): string {
   return API_BASE && path.startsWith("/api/") ? API_BASE + path : path;

@@ -1,8 +1,10 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100" height="100" role="img" aria-label="Minerva">
-  <!-- The Minerva mark at tab size: speech resolving into writing, read top to
-       bottom. The full mark (web/src/components/MinervaMark.tsx) uses four
-       lines; at 16px four turn to mush, so this keeps three and widens the
-       spacing. Filled ground so the shape holds on a light or a dark tab. -->
+  <!-- The Minerva mark, cut down for a 16px tab.
+       The full mark (see web/src/components/MinervaMark.tsx) carries two sound
+       arcs and two ruled lines. At favicon size the fainter arc and the second
+       rule turn to mush, so this keeps only what survives: the M whose middle vertex drops into a pen nib, and one rule for
+       the note it becomes. Filled ground rather than a transparent one, so it
+       holds its shape against a light or a dark tab strip. -->
   <defs>
     <linearGradient id="mg" x1="0" y1="0" x2="1" y2="1">
       <stop offset="0%" stop-color="#7c5cf0"/>
@@ -10,9 +12,9 @@
     </linearGradient>
   </defs>
   <rect width="100" height="100" rx="23" fill="url(#mg)"/>
-  <g stroke="#fff" stroke-width="7" stroke-linecap="round" stroke-linejoin="round" fill="none">
-    <path d="M18 33 L31 20 L42 46 L54 22 L66 42 L82 33"/>
-    <path d="M18 58 L36 51 L54 64 L82 57" opacity=".78"/>
-    <path d="M18 80 L64 80" opacity=".92"/>
+  <g fill="none" stroke="#fff" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M38 72 L38 31 L56 53 L74 31 L74 72" stroke-width="8.5"/>
+    <path d="M38 85 L79 85" stroke-width="5.5" opacity=".62"/>
   </g>
+  <circle cx="56" cy="53" r="4" fill="#fff"/>
 </svg>

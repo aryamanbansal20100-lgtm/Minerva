@@ -26,7 +26,27 @@ import re
 import urllib.error
 import urllib.request
 
-from . import config, net
+from . import config, net, store
+
+def groq_key() -> str:
+    """The signed-in student's own Groq key, falling back to the server's.
+
+    Groq's free tier gives every account 28,800 audio seconds a day -- eight
+    hours, comfortably more than anyone records at school. That allowance is per
+    ACCOUNT, so one shared key means all students draw from a single eight-hour
+    pool and the third one to record that day gets nothing. A student who adds
+    their own free key gets their own eight hours, and recording stays free no
+    matter how many people use Minerva.
+
+    Falls back to the server's key so nothing breaks for someone who has not
+    added one.
+    """
+    try:
+        own = store.groq_key()
+    except Exception:
+        own = ""                        # no signed-in user, e.g. a health check
+    return own or config.env("GROQ_API_KEY")
+
 
 CHAT_URL = "https://api.groq.com/openai/v1/chat/completions"
 
@@ -57,7 +77,7 @@ def catalogue() -> set:
     global _available
     if _available:
         return _available
-    key = config.env("GROQ_API_KEY")
+    key = groq_key()
     if not key:
         return set()
     req = urllib.request.Request(
@@ -99,7 +119,7 @@ class AIUnavailable(Exception):
 
 
 def configured() -> bool:
-    return bool(config.env("GROQ_API_KEY"))
+    return bool(groq_key())
 
 
 def status() -> dict:
@@ -112,7 +132,7 @@ def status() -> dict:
 def chat(system: str, user: str, model: str = "", temperature: float = 0.4,
          max_tokens: int = 1600, want_json: bool = False) -> str:
     global _last_error
-    key = config.env("GROQ_API_KEY")
+    key = groq_key()
     if not key:
         raise AIUnavailable(status()["reason"])
     payload = {

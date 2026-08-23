@@ -63,6 +63,7 @@ CREATE TABLE IF NOT EXISTS profile (
     timezone TEXT DEFAULT '', subjects TEXT DEFAULT '[]',
     managebac_ics TEXT DEFAULT '', goals TEXT DEFAULT '',
     timetable TEXT DEFAULT '[]',
+    groq_key TEXT DEFAULT '',
     onboarded INTEGER DEFAULT 0,
     created_at TEXT, updated_at TEXT);
 
@@ -148,6 +149,10 @@ def init() -> None:
         pcols = {r["name"] for r in c.execute("PRAGMA table_info(profile)")}
         if "timetable" not in pcols:
             c.execute("ALTER TABLE profile ADD COLUMN timetable TEXT DEFAULT '[]'")
+        if "groq_key" not in pcols:
+            # A student's own free Groq key, so their recording runs against
+            # their own quota instead of a shared one.
+            c.execute("ALTER TABLE profile ADD COLUMN groq_key TEXT DEFAULT ''")
         ncols = {r["name"] for r in c.execute("PRAGMA table_info(notes)")}
         if "continues" not in ncols:
             c.execute("ALTER TABLE notes ADD COLUMN continues INTEGER DEFAULT 0")
@@ -179,14 +184,34 @@ def get_profile() -> dict:
     except ValueError:
         p["timetable"] = []
     p["onboarded"] = bool(p["onboarded"])
+    # The student's own Groq key never leaves this machine. The browser is told
+    # only whether one is set and its last four characters, enough to recognise
+    # which key it is without being able to use it. Same rule the server key has
+    # always followed -- a secret that reaches the browser is a public secret.
+    raw = (p.pop("groq_key", "") or "").strip()
+    p["groq_key_set"] = bool(raw)
+    p["groq_key_hint"] = ("…" + raw[-4:]) if len(raw) > 4 else ""
     return p
+
+
+def groq_key() -> str:
+    """This student's own Groq key, if they have added one.
+
+    Read straight from their row rather than through get_profile, which strips
+    it on purpose. Empty string when unset, so callers fall back to the shared
+    server key.
+    """
+    init()
+    with connect() as c:
+        row = c.execute("SELECT groq_key FROM profile WHERE id=1").fetchone()
+    return ((dict(row).get("groq_key") if row else "") or "").strip()
 
 
 def save_profile(patch: dict) -> dict:
     init()
     allowed = ("name", "curriculum", "grade", "school", "city", "country",
                "timezone", "subjects", "managebac_ics", "goals", "onboarded",
-               "timetable")
+               "timetable", "groq_key")
     fields, values = [], []
     for k in allowed:
         if k not in patch:

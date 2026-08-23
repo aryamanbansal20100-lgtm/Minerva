@@ -40,6 +40,8 @@ export type Profile = {
   city?: string | null;
   subjects?: string[] | null;
   managebac_ics?: string | null;
+  groq_key_set?: boolean | null;
+  groq_key_hint?: string | null;
 };
 
 export type EngineStatus = {
@@ -330,6 +332,30 @@ export function SettingsPage({ state, refresh }: SettingsPageProps) {
       setLoadError(message(err));
     }
   }, []);
+
+  /* The student's own Groq key. Held in local state only while they are typing
+     it; the moment it is saved the server keeps it and hands back nothing but
+     "set" and the last four characters. */
+  const [keyInput, setKeyInput] = useState("");
+  const [keyBusy, setKeyBusy] = useState(false);
+  const [keySaid, setKeySaid] = useState("");
+
+  const saveKey = useCallback(async (value: string) => {
+    setKeyBusy(true);
+    setKeySaid("");
+    try {
+      await apiPost("/api/profile", { groq_key: value });
+      setKeyInput("");
+      setKeySaid(value ? "Saved. Recording now uses your own free quota."
+                       : "Removed. Recording falls back to the shared key.");
+      if (refresh) await Promise.resolve(refresh());
+      else await load();
+    } catch (err: unknown) {
+      setKeySaid(message(err));
+    } finally {
+      setKeyBusy(false);
+    }
+  }, [refresh, load]);
 
   useEffect(() => {
     if (state) return;
@@ -742,6 +768,75 @@ export function SettingsPage({ state, refresh }: SettingsPageProps) {
         </Card>
 
         {/* ------------------------------------------------ cloud backup */}
+        <Card
+          label="Recording"
+          aside={profile?.groq_key_set ? `your key ${profile.groq_key_hint ?? ""}` : "shared key"}
+        >
+          <div className="flex flex-col gap-3">
+            <p className="text-[13px] leading-relaxed text-muted-foreground">
+              Groq gives every account <strong className="text-foreground">8 hours
+              of transcription a day, free</strong> — more than anyone records at
+              school. That allowance belongs to the account the key came from, so
+              while everyone shares one key you all draw from the same 8 hours.
+              Add your own and you get your own.
+            </p>
+
+            {profile?.groq_key_set ? (
+              <div className="flex flex-wrap items-center gap-2.5">
+                <span className="rounded-md bg-ok/10 px-2 py-1 font-mono text-[12px] text-ok">
+                  using your key {profile.groq_key_hint}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => void saveKey("")}
+                  disabled={keyBusy}
+                  className="rounded-lg border px-3 py-1.5 text-[13px] text-muted-foreground transition-colors hover:bg-muted disabled:opacity-60"
+                >
+                  Remove it
+                </button>
+              </div>
+            ) : (
+              <div className="flex flex-wrap items-center gap-2">
+                <input
+                  type="password"
+                  value={keyInput}
+                  onChange={(e) => setKeyInput(e.target.value)}
+                  placeholder="gsk_…"
+                  autoComplete="off"
+                  spellCheck={false}
+                  className="min-w-0 flex-1 rounded-lg border bg-background px-3 py-1.5 font-mono text-[13px] outline-none focus-visible:ring-2 focus-visible:ring-brand-ring"
+                />
+                <button
+                  type="button"
+                  onClick={() => void saveKey(keyInput.trim())}
+                  disabled={keyBusy || !keyInput.trim()}
+                  className="btn-brand rounded-lg px-3 py-1.5 text-[13px] font-semibold disabled:opacity-60"
+                >
+                  {keyBusy ? "Saving…" : "Use my key"}
+                </button>
+              </div>
+            )}
+
+            {keySaid ? (
+              <span className="text-[12.5px] text-muted-foreground">{keySaid}</span>
+            ) : null}
+
+            <p className="text-[12px] leading-relaxed text-muted-foreground">
+              Get one free at{" "}
+              <a
+                href="https://console.groq.com/keys"
+                target="_blank"
+                rel="noreferrer noopener"
+                className="text-brand underline underline-offset-2"
+              >
+                console.groq.com/keys
+              </a>
+              . No card needed. It is stored on the server and never sent back to
+              this page — you will only ever see the last four characters.
+            </p>
+          </div>
+        </Card>
+
         <Card label="Cloud backup">
           <div className="flex items-center gap-2">
             <Dot

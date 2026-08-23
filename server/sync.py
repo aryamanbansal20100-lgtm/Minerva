@@ -64,7 +64,22 @@ def push_task(task: dict) -> None:
 def push_profile(profile: dict) -> None:
     if not profile:
         return
+    # Read the raw key HERE, on the request thread, not inside the closure.
+    # store.uid() is thread-local and _fire runs the upload on a fresh thread
+    # that never calls set_user, so a read in there would silently open the
+    # "local" database and mirror the wrong account's key.
+    #
+    # It is synced on purpose. The alternative is losing it on every redeploy,
+    # because the free host's disk is wiped each time. It is the student's own
+    # free-tier key with no card behind it, it lands in a Firestore document the
+    # rules lock to their uid, and it is strictly less sensitive than the term of
+    # notes already sitting beside it. It still never goes to the browser.
+    try:
+        raw_key = store.groq_key()
+    except Exception:
+        raw_key = ""
     _fire(lambda uid, p: cloud.put_profile(uid, {
+        "groq_key": raw_key,
         "name": p.get("name", ""), "curriculum": p.get("curriculum", ""),
         "grade": p.get("grade", ""), "school": p.get("school", ""),
         "city": p.get("city", ""), "country": p.get("country", ""),
@@ -142,7 +157,8 @@ def pull_if_new() -> dict:
 
     store.save_profile({k: remote.get(k) for k in (
         "name", "curriculum", "grade", "school", "city", "country",
-        "subjects", "timetable", "managebac_ics", "onboarded") if k in remote})
+        "subjects", "timetable", "managebac_ics", "onboarded",
+        "groq_key") if k in remote})
 
     notes = cloud.fetch(uid, "notes")
     for n in notes:
@@ -230,8 +246,8 @@ def pull_all() -> dict:
     if profile and not store.get_profile().get("onboarded"):
         store.save_profile({k: profile.get(k) for k in (
             "name", "curriculum", "grade", "school", "city", "country",
-            "subjects", "timetable", "managebac_ics", "onboarded")
-            if k in profile})
+            "subjects", "timetable", "managebac_ics", "onboarded",
+            "groq_key") if k in profile})
 
     total = sum(added.values())
     return {"ok": True, **added, "already_had": skipped,

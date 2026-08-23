@@ -100,11 +100,17 @@ const NAV: { label: string; hash: string; match: Route["name"] }[] = [
 export default function App() {
   const { user, signOut } = useAuth()
   const [accountMenu, setAccountMenu] = useState(false)
+  /* On a phone the sidebar is a drawer, not a column. 236px of fixed navigation
+     on a 375px screen leaves nothing for the notes themselves. */
+  const [navOpen, setNavOpen] = useState(false)
   const [route, setRoute] = useState<Route>(parseHash())
   const [state, setState] = useState<State | null>(null)
 
   useEffect(() => {
-    const onHash = () => setRoute(parseHash())
+    const onHash = () => {
+      setRoute(parseHash())
+      setNavOpen(false)
+    }
     window.addEventListener("hashchange", onHash)
     return () => window.removeEventListener("hashchange", onHash)
   }, [])
@@ -176,7 +182,25 @@ export default function App() {
 
   return (
     <div className="flex h-screen overflow-hidden bg-background text-foreground">
-      <aside className="flex w-[236px] shrink-0 flex-col border-r bg-muted/25">
+      {/* Backdrop. Only exists on a phone, and only while the drawer is open. */}
+      {navOpen ? (
+        <button
+          aria-label="Close menu"
+          onClick={() => setNavOpen(false)}
+          className="fixed inset-0 z-30 bg-black/40 md:hidden"
+        />
+      ) : null}
+
+      <aside
+        className={cn(
+          "flex w-[236px] shrink-0 flex-col border-r bg-muted/25",
+          // Phone: slide over the content, above the backdrop.
+          "fixed inset-y-0 left-0 z-40 transition-transform duration-200 ease-out",
+          navOpen ? "translate-x-0 shadow-2xl" : "-translate-x-full",
+          // Desktop: back to being an ordinary column that is always there.
+          "md:static md:z-auto md:translate-x-0 md:shadow-none",
+        )}
+      >
         <div className="relative border-b">
           <button
             onClick={() => setAccountMenu((v) => !v)}
@@ -318,6 +342,27 @@ export default function App() {
       </aside>
 
       <main className="flex min-w-0 flex-1 flex-col overflow-y-auto">
+        {/* Phone-only top bar: the only way to reach navigation once the
+            sidebar is off-canvas. Hidden the moment there is room for the
+            real sidebar. */}
+        <div className="sticky top-0 z-20 flex items-center gap-3 border-b bg-background/90 px-4 py-2.5 backdrop-blur md:hidden">
+          <button
+            onClick={() => setNavOpen(true)}
+            aria-label="Open menu"
+            className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+              <path d="M4 6h16M4 12h16M4 18h16" />
+            </svg>
+          </button>
+          <span className="text-[14px] font-semibold tracking-tight">Minerva</span>
+          {openTasks > 0 ? (
+            <span className="ml-auto rounded-full bg-warn/15 px-2 py-0.5 text-[11px] font-medium tabular-nums text-warn">
+              {openTasks} due
+            </span>
+          ) : null}
+        </div>
+
         {route.name === "notes" && (
           <>
             {/* The quiet helping hand: shows at most one thing worth doing now,

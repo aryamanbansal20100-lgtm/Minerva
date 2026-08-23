@@ -1347,9 +1347,27 @@ class Handler(SimpleHTTPRequestHandler):
                 return self._json({"error": why}, 400)
 
             text, how = readfile.read(name, mime, blob)
-            # Past the ceiling the original is dropped and the text kept. Said
-            # plainly in the response, because a student who thinks the file is
-            # stored and finds it gone later has been misled by us.
+            words = len(text.split())
+
+            # Dropping the original is only defensible when there is text to
+            # keep in its place. When extraction finds nothing -- a scanned
+            # textbook is images, and there is no OCR here -- the bytes are the
+            # only thing of value, and discarding them leaves a row claiming a
+            # document exists with neither its text nor its file. That is worse
+            # than refusing the upload, so refuse it and say why.
+            if words < 20 and len(blob) > KEEP_ORIGINAL_MAX:
+                return self._json({
+                    "error": f"No text could be read out of {name}, and at "
+                             f"{len(blob) // (1024*1024)} MB it is too large to "
+                             f"store as a file. Nothing was saved. "
+                             + (f"({how}) " if how else "")
+                             + "Scanned pages are pictures of text — try a "
+                               "digital copy, or upload just the chapter you need.",
+                }, 422)
+
+            # Otherwise the original is kept whenever it fits, whether or not
+            # the text came out: an unreadable file you can still open beats a
+            # deleted one.
             kept = len(blob) <= KEEP_ORIGINAL_MAX
             row = store.add_document(payload.get("subject", ""), name, mime,
                                      blob if kept else b"", text)
@@ -1363,13 +1381,12 @@ class Handler(SimpleHTTPRequestHandler):
             path.unlink(missing_ok=True)
 
         return self._json(row | {
-            "readable": bool(text.strip()), "how": how,
-            "words": len(text.split()), "text": text[:200000],
+            "readable": words >= 20, "how": how,
+            "words": words, "text": text[:200000],
             "original_kept": kept,
             "note": "" if kept else
-                    (f"Kept the text ({len(text.split()):,} words). The original "
-                     f"file was too large to store, so it cannot be reopened "
-                     f"from here."),
+                    (f"Kept the text ({words:,} words). The original file was "
+                     f"too large to store, so it cannot be reopened from here."),
         })
 
     def _chunk(self):

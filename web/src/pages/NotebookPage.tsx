@@ -838,7 +838,7 @@ export default function NotebookPage({
                   Drop worksheets, briefs or past papers here
                 </span>
                 <span className="mt-1 block text-[12.5px] text-muted-foreground">
-                  PDFs get read so you can ask questions about them. Up to 20 MB
+                  PDFs get read so you can ask questions about them. Up to 300 MB
                   each.
                 </span>
               </>
@@ -897,12 +897,12 @@ export default function NotebookPage({
                       </button>
                       <span className="mt-1 flex flex-wrap items-center gap-1.5 text-[11.5px] text-muted-foreground">
                         <span className="font-mono tabular-nums">
-                          {(f.size / 1024).toFixed(0)} KB
+                          {f.size > 0 ? `${(f.size / 1024).toFixed(0)} KB` : "text only"}
                         </span>
                         <span className="font-mono tabular-nums">
                           {when(f.created_at)}
                         </span>
-                        {f.chars > 40 ? (
+                        {f.chars > 200 ? (
                           <Pill tone="new">readable</Pill>
                         ) : (
                           <Pill>not searchable</Pill>

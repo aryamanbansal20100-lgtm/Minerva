@@ -32,7 +32,26 @@ DIST = ROOT / "web" / "dist"
 # built, fall back to the vanilla UI. Either way this process is the whole app.
 WEB_ROOT = DIST if (DIST / "index.html").exists() else UI_DIR
 IS_BUILT_APP = WEB_ROOT == DIST
+# One CHUNK of an upload, not a whole file. Files arrive in pieces now (see
+# _doc_chunk), so this never has to be large -- which is the point. It used to
+# have to exceed the biggest file anyone might send, and every one of those
+# bytes sat in memory at once.
 MAX_BODY = 30 * 1024 * 1024
+
+# What a document may weigh in total. A free host has 512 MB of RAM, and text
+# extraction is the one step that genuinely needs the whole file at once, so
+# this is a real ceiling rather than a shrug.
+MAX_DOCUMENT = 300 * 1024 * 1024
+
+# Above this the original bytes are dropped and only the extracted text is
+# kept. A 300 MB scan mirrored into Firestore would be three hundred documents
+# of base64 on an account whose whole free quota is 1 GB, on a host that wipes
+# its disk every redeploy -- all to re-download something the student already
+# has. The text is the part Minerva can actually do anything with.
+KEEP_ORIGINAL_MAX = 25 * 1024 * 1024
+
+# Where partial uploads accumulate while they arrive.
+UPLOAD_TMP = ROOT / "data" / "uploads"
 
 
 # ---------------------------------------------------------------------------
@@ -386,7 +405,7 @@ class Handler(SimpleHTTPRequestHandler):
             self.send_header("Access-Control-Allow-Headers",
                              "Content-Type, Authorization, X-Capture-Key, "
                              "X-Capture-Uid, X-Mail-Token, X-Recording, "
-                             "X-Chunk, X-Note, X-Filename")
+                             "X-Chunk, X-Note, X-Filename, X-Upload")
             self.send_header("Access-Control-Allow-Methods",
                              "GET, POST, OPTIONS")
             self.send_header("Access-Control-Max-Age", "600")
@@ -685,9 +704,13 @@ class Handler(SimpleHTTPRequestHandler):
             busy(-1)
 
     def _post(self, path: str):
-        # Raw audio, handled before the JSON parse.
+        # Raw bodies, handled before the JSON parse -- both of these are file
+        # bytes, and putting them through json.loads would mean holding the
+        # whole thing in memory as a string first.
         if path == "/api/record/chunk":
             return self._chunk()
+        if path == "/api/document/chunk":
+            return self._doc_chunk()
 
         payload = json.loads(self._body() or b"{}")
 
@@ -703,6 +726,9 @@ class Handler(SimpleHTTPRequestHandler):
 
         if path == "/api/document/upload":
             return self._upload(payload)
+
+        if path == "/api/document/finish":
+            return self._doc_finish(payload)
 
         if path == "/api/document/delete":
             sync.delete_document(payload.get("id", ""))
@@ -1261,6 +1287,90 @@ class Handler(SimpleHTTPRequestHandler):
         return self._json(row | {"readable": bool(text.strip()), "how": how,
                                  "words": len(text.split()),
                                  "text": text[:200000]})
+
+    # ---------------------------------------------------------------- uploads
+    def _upload_path(self, upload_id: str):
+        """Temp file for one in-flight upload, scoped to the signed-in student.
+
+        The id comes from the browser, so it is sanitised to a bare token and
+        prefixed with the uid: without that, a crafted id could name any path on
+        disk, and two students could collide on the same partial file.
+        """
+        safe = "".join(c for c in upload_id if c.isalnum() or c in "-_")[:64]
+        if not safe:
+            return None
+        who = "".join(c for c in store.uid() if c.isalnum() or c in "-_")[:64]
+        UPLOAD_TMP.mkdir(parents=True, exist_ok=True)
+        return UPLOAD_TMP / f"{who}.{safe}.part"
+
+    def _doc_chunk(self):
+        """One slice of a file, raw, appended straight to disk.
+
+        Raw bytes rather than base64 inside JSON: base64 inflates by a third,
+        and the JSON body had to be parsed in full before a single byte could be
+        written anywhere. Between them that turned a 300 MB textbook into about
+        700 MB of resident memory on a 512 MB host -- an out-of-memory kill that
+        took down every other student's session too, not just the upload.
+
+        Now the peak is one chunk, whatever the file weighs.
+        """
+        path = self._upload_path(self.headers.get("X-Upload", ""))
+        if path is None:
+            return self._json({"error": "bad upload id"}, 400)
+        first = self.headers.get("X-Chunk", "") in ("0", "")
+        blob = self._body()
+        if not blob:
+            return self._json({"error": "empty chunk"}, 400)
+
+        size = (0 if first else (path.stat().st_size if path.exists() else 0))
+        if size + len(blob) > MAX_DOCUMENT:
+            path.unlink(missing_ok=True)
+            return self._json({"error": f"that file is over the "
+                                        f"{MAX_DOCUMENT // (1024*1024)} MB limit"}, 413)
+
+        with open(path, "wb" if first else "ab") as fh:
+            fh.write(blob)
+        return self._json({"ok": True, "received": path.stat().st_size})
+
+    def _doc_finish(self, payload):
+        """All slices are in. Read once, extract, store, delete the temp file."""
+        path = self._upload_path(payload.get("upload_id", ""))
+        if path is None or not path.exists():
+            return self._json({"error": "that upload was not found — try again"}, 400)
+
+        name = payload.get("name", "file")
+        mime = payload.get("mime", "") or mimetypes.guess_type(name)[0] or ""
+        try:
+            blob = path.read_bytes()
+            ok, why = pdftext.looks_valid(name, blob)
+            if not ok:
+                return self._json({"error": why}, 400)
+
+            text, how = readfile.read(name, mime, blob)
+            # Past the ceiling the original is dropped and the text kept. Said
+            # plainly in the response, because a student who thinks the file is
+            # stored and finds it gone later has been misled by us.
+            kept = len(blob) <= KEEP_ORIGINAL_MAX
+            row = store.add_document(payload.get("subject", ""), name, mime,
+                                     blob if kept else b"", text)
+            if kept:
+                sync.push_document(row, blob)
+        except MemoryError:
+            return self._json({"error": "that file is too large for this server "
+                                        "to read. Try the chapter you need "
+                                        "rather than the whole book."}, 413)
+        finally:
+            path.unlink(missing_ok=True)
+
+        return self._json(row | {
+            "readable": bool(text.strip()), "how": how,
+            "words": len(text.split()), "text": text[:200000],
+            "original_kept": kept,
+            "note": "" if kept else
+                    (f"Kept the text ({len(text.split()):,} words). The original "
+                     f"file was too large to store, so it cannot be reopened "
+                     f"from here."),
+        })
 
     def _chunk(self):
         rec_id = self.headers.get("X-Recording", "")

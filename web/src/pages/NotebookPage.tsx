@@ -25,7 +25,7 @@
    ========================================================================== */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { apiBlob, apiGet, apiPost } from "@/lib/api";
+import { apiBlob, apiGet, apiPost, apiPostRaw } from "@/lib/api";
 import { StatRow } from "@/components/StatRow";
 import { cn } from "@/lib/utils";
 import { Panel, Pill, SubjectDot, TaskRow, bandOf, hueFor } from "@/pages/DuePage";
@@ -93,7 +93,46 @@ export type NotebookPageProps = {
 
 /* ---------------------------------------------------------------- helpers */
 
-const MAX_UPLOAD_BYTES = 20 * 1024 * 1024;
+/* What a single file may weigh. Textbooks and scanned ebooks routinely run to
+   hundreds of megabytes, and the old 20 MB ceiling rejected essentially every
+   real one. Files are sent in slices now rather than base64'd whole into a
+   JSON body, so a big one costs the server one slice of memory instead of
+   roughly 2.3x the file. */
+const MAX_UPLOAD_BYTES = 300 * 1024 * 1024;
+
+/* Anything above this is sliced. Below it the old single-shot path is fine and
+   saves a round trip. */
+const CHUNK_THRESHOLD = 6 * 1024 * 1024;
+const CHUNK_BYTES = 4 * 1024 * 1024;
+
+/* Send one file as a sequence of raw slices, then ask the server to finish it.
+   onProgress reports 0..1 so a 200 MB book does not look frozen. */
+async function uploadInSlices(
+  file: File,
+  subject: string,
+  onProgress: (fraction: number) => void,
+): Promise<{ note?: string }> {
+  const uploadId =
+    Date.now().toString(36) + Math.random().toString(36).slice(2, 10);
+  const total = Math.ceil(file.size / CHUNK_BYTES);
+
+  for (let i = 0; i < total; i++) {
+    const slice = file.slice(i * CHUNK_BYTES, (i + 1) * CHUNK_BYTES);
+    await apiPostRaw("/api/document/chunk", slice, {
+      "Content-Type": "application/octet-stream",
+      "X-Upload": uploadId,
+      "X-Chunk": String(i),
+    });
+    onProgress((i + 1) / total);
+  }
+
+  return await apiPost("/api/document/finish", {
+    upload_id: uploadId,
+    name: file.name,
+    mime: file.type,
+    subject,
+  });
+}
 
 const ACCEPT =
   ".pdf,.txt,.md,.png,.jpg,.jpeg,.webp,.doc,.docx,.ppt,.pptx";
@@ -337,17 +376,33 @@ export default function NotebookPage({
       const failures: string[] = [];
       for (const file of files) {
         if (file.size > MAX_UPLOAD_BYTES) {
-          failures.push(`${file.name} is over 20 MB.`);
+          failures.push(
+            `${file.name} is ${(file.size / 1024 / 1024).toFixed(0)} MB — the limit is 300 MB.`,
+          );
           continue;
         }
         setUploading({ name: file.name, done: added, total: files.length });
         try {
-          const dataUrl = await readAsDataUrl(file);
-          await apiPost("/api/document/upload", {
-            subject,
-            name: file.name,
-            data: dataUrl,
-          });
+          if (file.size > CHUNK_THRESHOLD) {
+            const out = await uploadInSlices(file, subject, (fraction) =>
+              setUploading({
+                name: `${file.name} · ${Math.round(fraction * 100)}%`,
+                done: added,
+                total: files.length,
+              }),
+            );
+            // The server drops the original above its keep-limit and says so.
+            // Surfacing that is the difference between a student knowing the
+            // text was saved and believing the whole file is still there.
+            if (out?.note) failures.push(`${file.name}: ${out.note}`);
+          } else {
+            const dataUrl = await readAsDataUrl(file);
+            await apiPost("/api/document/upload", {
+              subject,
+              name: file.name,
+              data: dataUrl,
+            });
+          }
           added++;
         } catch (err: unknown) {
           failures.push(`${file.name}: ${messageOf(err)}`);

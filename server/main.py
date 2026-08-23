@@ -526,7 +526,21 @@ class Handler(SimpleHTTPRequestHandler):
                 "documents": len(store.documents()),
                 "tasks": len(store.tasks(open_only=False)),
             }
-            if not st["enabled"]:
+            if not auth.required():
+                # Sign-in switched off is a development mode, and it looks
+                # exactly like catastrophe: the server serves a blank scratch
+                # account from a different file, so a student sees an empty app
+                # and concludes every note they own has been deleted. The data
+                # is untouched under their real uid and completely invisible
+                # from here. Say so, loudly, rather than reporting an empty
+                # account as if it were the truth.
+                verdict = "no-auth"
+                say = ("Sign-in is switched off on this server, so you are "
+                       "looking at a blank local account — NOT your Google "
+                       "account. Nothing has been deleted: your notes are "
+                       "safe under your real account. Restart the server "
+                       "without EVIE_REQUIRE_AUTH=0 to get them back.")
+            elif not st["enabled"]:
                 verdict = "off"
                 say = ("Cloud backup is switched off. Your notes live only on "
                        "this device.")
@@ -1366,6 +1380,17 @@ def serve() -> None:
     if net.status()["relaxed_strict_x509"]:
         print("  tls       relaxed strict-X509 (TLS inspection on this network)")
     print()
+    if not auth.required():
+        # Impossible to miss, because missing it costs someone their afternoon.
+        # With sign-in off the server hands out a blank scratch account, which
+        # is indistinguishable from every note having been deleted.
+        print("  " + "!" * 66)
+        print("  !!  SIGN-IN IS OFF (EVIE_REQUIRE_AUTH=0)")
+        print("  !!  This serves a BLANK local account, not anyone's Google")
+        print("  !!  account. Real notes are on disk and will look deleted.")
+        print("  !!  Restart without EVIE_REQUIRE_AUTH=0 for normal use.")
+        print("  " + "!" * 66)
+        print()
     print(f"  http://{host}:{port}")
     print()
     ThreadingHTTPServer((host, port), Handler).serve_forever()

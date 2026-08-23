@@ -281,6 +281,50 @@ def managebac_view() -> dict:
 # ---------------------------------------------------------------------------
 # HTTP
 # ---------------------------------------------------------------------------
+def security_policy() -> str:
+    """The Content-Security-Policy this app can actually run under.
+
+    Built from what the bundle genuinely talks to rather than copied from a
+    template: Google Fonts for the typefaces, apis.google.com and the
+    googleapis hosts for Firebase auth and Firestore, an onrender.com wildcard
+    because the front end and the API are separate services, and blob: for
+    recorded audio, which is a MediaRecorder blob and not a network fetch.
+
+    script-src deliberately has no 'unsafe-inline': the built index.html loads
+    one module and nothing else, so allowing inline script would buy nothing
+    and cost the main protection CSP offers. style-src does need it, because
+    React sets element styles inline all over the app.
+    """
+    api = config.env("EVIE_API_ORIGIN", "").strip().rstrip("/")
+    extra = [o.strip().rstrip("/") for o
+             in config.env("EVIE_ALLOWED_ORIGINS", "").split(",") if o.strip()]
+    connect = ["'self'", "blob:", "https://*.googleapis.com",
+               "https://*.google.com", "https://*.onrender.com",
+               "https://*.netlify.app"] + ([api] if api else []) + extra
+    return "; ".join([
+        "default-src 'self'",
+        "base-uri 'self'",
+        "object-src 'none'",
+        # Nobody may put this app in a frame — the anti-clickjacking control
+        # that actually matters; X-Frame-Options is the legacy spelling.
+        "frame-ancestors 'none'",
+        "form-action 'self'",
+        "script-src 'self' https://apis.google.com https://www.google.com "
+        "https://www.googleapis.com",
+        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+        "font-src 'self' data: https://fonts.gstatic.com",
+        "img-src 'self' data: blob: https://*.googleusercontent.com "
+        "https://www.google.com",
+        "media-src 'self' blob:",
+        "connect-src " + " ".join(dict.fromkeys(connect)),
+        # Firebase runs its sign-in handshake in a hidden iframe on
+        # firebaseapp.com; block this and Google sign-in stops working.
+        "frame-src https://*.firebaseapp.com https://accounts.google.com "
+        "https://*.google.com",
+        "worker-src 'self' blob:",
+    ])
+
+
 class Handler(SimpleHTTPRequestHandler):
     server_version = "Minerva/2.0"
 
@@ -364,10 +408,34 @@ class Handler(SimpleHTTPRequestHandler):
         self.send_header("Content-Length", "0")
         self.end_headers()
 
+    def _security_headers(self):
+        """Sent on every response, HTML and JSON alike.
+
+        There were none at all before this. On a public domain holding other
+        people's schoolwork that is not a small omission: no clickjacking
+        defence, no MIME-sniffing defence, nothing telling the browser to stay
+        on HTTPS, and the full URL of every note leaking in the Referer header
+        to any third party the page touched.
+        """
+        self.send_header("X-Content-Type-Options", "nosniff")
+        self.send_header("X-Frame-Options", "DENY")
+        self.send_header("Referrer-Policy", "strict-origin-when-cross-origin")
+        # The microphone is the whole product, so it stays allowed for this
+        # origin. Everything else a page can ask a browser for is refused.
+        self.send_header("Permissions-Policy",
+                         "microphone=(self), camera=(), geolocation=(), "
+                         "payment=(), usb=(), interest-cohort=()")
+        self.send_header("Content-Security-Policy", security_policy())
+        # Browsers ignore HSTS over plain http, so this is inert on localhost
+        # and does its job the moment the app is behind a real certificate.
+        self.send_header("Strict-Transport-Security",
+                         "max-age=31536000; includeSubDomains")
+
     def end_headers(self):
         # Never cache the UI. Without this the browser keeps serving an old
         # app.js after a restart, and you debug a bug that is no longer in the
         # source — which is exactly what happened while building this.
+        self._security_headers()
         if not self.path.startswith("/api/"):
             self.send_header("Cache-Control", "no-store, must-revalidate")
         else:

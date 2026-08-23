@@ -59,3 +59,58 @@ services:
     #   name: minerva-data
     #   mountPath: /opt/render/project/src/data
     #   sizeGB: 1
+
+  # ---------------------------------------------------------------------
+  # The front end, as a static site. Free, and — unlike a free web service —
+  # it never spins down, so the app appears instantly instead of showing
+  # Render's cold-start screen for a minute while the Python process wakes.
+  # The API behind it still sleeps; the difference is that the interface is
+  # already on screen while that happens, rather than a blank page.
+  #
+  # This is what Netlify was doing. Keeping it on Render means one dashboard,
+  # one repo connection, and no second provider to configure or run out of.
+  # ---------------------------------------------------------------------
+  - type: web
+    name: minerva
+    runtime: static
+    plan: free
+    # Documented monorepo form: build inside web/, publish from the repo root.
+    buildCommand: "cd web && npm ci && npm run build"
+    staticPublishPath: ./web/dist
+    routes:
+      # The app routes on the hash (#/notes), so every request is for
+      # index.html. Without this a refresh on a deep link 404s.
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    headers:
+      # Vite fingerprints these filenames, so a changed file is a changed URL
+      # and a long cache is safe.
+      - path: /assets/*
+        name: Cache-Control
+        value: public, max-age=31536000, immutable
+      - path: /index.html
+        name: Cache-Control
+        value: no-cache
+      # Security headers. A static host serves these itself -- the Python
+      # server's copies never reach a page it did not serve, so leaving them
+      # out here would protect the API and not the app anyone actually loads.
+      # Keep in step with security_policy() in server/main.py.
+      - path: /*
+        name: Content-Security-Policy
+        value: "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; form-action 'self'; script-src 'self' https://apis.google.com https://www.google.com https://www.googleapis.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob: https://*.googleusercontent.com https://www.google.com; media-src 'self' blob:; connect-src 'self' blob: https://*.googleapis.com https://*.google.com https://*.onrender.com; frame-src https://*.firebaseapp.com https://accounts.google.com https://*.google.com; worker-src 'self' blob:"
+      - path: /*
+        name: X-Content-Type-Options
+        value: nosniff
+      - path: /*
+        name: X-Frame-Options
+        value: DENY
+      - path: /*
+        name: Referrer-Policy
+        value: strict-origin-when-cross-origin
+      - path: /*
+        name: Permissions-Policy
+        value: "microphone=(self), camera=(), geolocation=(), payment=(), usb=()"
+      - path: /*
+        name: Strict-Transport-Security
+        value: "max-age=31536000; includeSubDomains"

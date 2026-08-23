@@ -129,14 +129,24 @@ def status() -> dict:
                       "no GROQ_API_KEY in .env — get a free one at console.groq.com/keys"}
 
 
-def chat(system: str, user: str, model: str = "", temperature: float = 0.4,
-         max_tokens: int = 1600, want_json: bool = False) -> str:
-    global _last_error
-    key = groq_key()
-    if not key:
-        raise AIUnavailable(status()["reason"])
+# NVIDIA's hosted catalogue speaks the same OpenAI dialect as Groq, so the only
+# differences are the address, the key and the model name. Free tier: 40 requests
+# a minute, no card. It exists here as a second pair of hands, not a replacement
+# -- Groq stays first because it is faster.
+NVIDIA_URL = "https://integrate.api.nvidia.com/v1/chat/completions"
+NVIDIA_MODELS = ["nvidia/nemotron-3.5-lightning", "nvidia/nemotron-3-super",
+                 "nvidia/llama-3.3-nemotron-super-49b-v1"]
+
+
+def nvidia_key() -> str:
+    return config.env("NVIDIA_API_KEY")
+
+
+def _openai_chat(url: str, key: str, model: str, system: str, user: str,
+                 temperature: float, max_tokens: int, want_json: bool) -> str:
+    """One request to an OpenAI-shaped chat endpoint. Raises AIUnavailable."""
     payload = {
-        "model": model or big(),
+        "model": model,
         "messages": [{"role": "system", "content": system},
                      {"role": "user", "content": user}],
         "temperature": temperature,
@@ -145,21 +155,53 @@ def chat(system: str, user: str, model: str = "", temperature: float = 0.4,
     if want_json:
         payload["response_format"] = {"type": "json_object"}
     req = urllib.request.Request(
-        CHAT_URL, data=json.dumps(payload).encode("utf-8"), method="POST",
+        url, data=json.dumps(payload).encode("utf-8"), method="POST",
         headers={"Content-Type": "application/json", "User-Agent": USER_AGENT,
                  "Authorization": f"Bearer {key}"})
     try:
         with net.urlopen(req, timeout=90) as resp:
             out = json.loads(resp.read().decode("utf-8"))
-        _last_error = ""
         return out["choices"][0]["message"]["content"].strip()
     except urllib.error.HTTPError as exc:
         body = exc.read()[:200].decode("utf-8", "replace")
-        _last_error = f"HTTP {exc.code} {body}"
-        raise AIUnavailable(_last_error) from exc
+        raise AIUnavailable(f"HTTP {exc.code} {body}") from exc
     except (urllib.error.URLError, OSError, KeyError, ValueError) as exc:
-        _last_error = f"{type(exc).__name__}: {exc}"
-        raise AIUnavailable(_last_error) from exc
+        raise AIUnavailable(f"{type(exc).__name__}: {exc}") from exc
+
+
+def chat(system: str, user: str, model: str = "", temperature: float = 0.4,
+         max_tokens: int = 1600, want_json: bool = False) -> str:
+    """Groq first, NVIDIA second.
+
+    Groq returning 502 mid-lesson used to lose the slice outright -- the note
+    for that stretch of class simply never got written, and the student found
+    out afterwards. A second provider on a different network means one of them
+    being down is no longer the same as the feature being down.
+    """
+    global _last_error
+
+    attempts = []
+    key = groq_key()
+    if key:
+        attempts.append((CHAT_URL, key, model or big(), "groq"))
+    nkey = nvidia_key()
+    if nkey:
+        attempts.append((NVIDIA_URL, nkey,
+                         config.env("NVIDIA_MODEL") or NVIDIA_MODELS[0], "nvidia"))
+    if not attempts:
+        raise AIUnavailable(status()["reason"])
+
+    problems = []
+    for url, k, name, who in attempts:
+        try:
+            text = _openai_chat(url, k, name, system, user, temperature,
+                                max_tokens, want_json)
+            _last_error = ""
+            return text
+        except AIUnavailable as exc:
+            problems.append(f"{who}: {exc}")
+    _last_error = " | ".join(problems)[:300]
+    raise AIUnavailable(_last_error)
 
 
 GEMINI_URL = ("https://generativelanguage.googleapis.com/v1beta/models/"

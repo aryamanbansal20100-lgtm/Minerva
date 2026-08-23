@@ -30,6 +30,11 @@ services:
         sync: false
       - key: GEMINI_API_KEY
         sync: false
+      # Optional third provider. Free at build.nvidia.com -- 40 requests a
+      # minute, no card. Only used when Groq fails, which it does often enough
+      # mid-lesson to matter. Leave unset and nothing changes.
+      - key: NVIDIA_API_KEY
+        sync: false
       - key: FIREBASE_API_KEY
         sync: false
       # NOT a secret: the project id is already visible in the browser bundle

@@ -7,8 +7,8 @@ import { cn } from "@/lib/utils"
 
      sound arrives      two arcs on the left, a voice reaching the microphone
      it is captured     the M itself, drawn as one continuous stroke, its middle
-                        vertex pulled down into a pen nib — the moment speech
-                        becomes writing
+                        vertex pulled below where an M's would sit so the shape
+                        comes to a point, the way a nib does
      it becomes notes   two ruled lines beneath, written out left to right, the
                         second shorter as a real last line of a paragraph is
 
@@ -93,20 +93,6 @@ export default function MinervaMark({
         }
       />
 
-      {/* the nib itself: a small solid point at the vertex, where speech
-          becomes ink */}
-      <circle
-        cx="64"
-        cy="66"
-        r="4.5"
-        fill={`url(#${grad})`}
-        style={
-          animate
-            ? { animation: "mark-nib .35s cubic-bezier(.34,1.56,.64,1) 1.05s both" }
-            : undefined
-        }
-      />
-
       {/* 3. BECOMING NOTES — ruled lines written out beneath. The second is
              shorter, the way a real last line of a paragraph stops early. */}
       <g stroke="currentColor" strokeWidth="5" strokeLinecap="round" opacity="0.55">
@@ -115,7 +101,7 @@ export default function MinervaMark({
           strokeDasharray="58"
           style={
             animate
-              ? { animation: "mark-rule .45s cubic-bezier(.4,0,.2,1) 1.15s both" }
+              ? { animation: "mark-rule .45s cubic-bezier(.4,0,.2,1) 0.95s both" }
               : undefined
           }
         />
@@ -124,7 +110,7 @@ export default function MinervaMark({
           strokeDasharray="36"
           style={
             animate
-              ? { animation: "mark-rule .45s cubic-bezier(.4,0,.2,1) 1.32s both" }
+              ? { animation: "mark-rule .45s cubic-bezier(.4,0,.2,1) 1.12s both" }
               : undefined
           }
         />
@@ -142,10 +128,6 @@ export const MARK_KEYFRAMES = `
   @keyframes mark-draw {
     from { stroke-dashoffset: 180; }
     to   { stroke-dashoffset: 0; }
-  }
-  @keyframes mark-nib {
-    from { opacity: 0; transform: scale(0); transform-origin: 64px 66px; }
-    to   { opacity: 1; transform: scale(1); transform-origin: 64px 66px; }
   }
   @keyframes mark-rule {
     from { stroke-dashoffset: 58; opacity: 0; }

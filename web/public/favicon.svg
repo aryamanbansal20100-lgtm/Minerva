@@ -3,8 +3,8 @@
        The full mark (see web/src/components/MinervaMark.tsx) carries two sound
        arcs and two ruled lines. At favicon size the fainter arc and the second
        rule turn to mush, so this keeps only what survives: one arc for sound
-       arriving, the M whose middle vertex drops into a pen nib, one rule for
-       the note it becomes. Filled ground rather than a transparent one, so it
+       arriving, the M whose middle vertex drops to a point like a nib, one
+       rule for the note it becomes. Filled ground rather than a transparent one, so it
        holds its shape against a light or a dark tab strip. -->
   <defs>
     <linearGradient id="mg" x1="0" y1="0" x2="1" y2="1">
@@ -18,5 +18,4 @@
     <path d="M38 72 L38 31 L56 53 L74 31 L74 72" stroke-width="8.5"/>
     <path d="M38 85 L79 85" stroke-width="5.5" opacity=".62"/>
   </g>
-  <circle cx="56" cy="53" r="4" fill="#fff"/>
 </svg>

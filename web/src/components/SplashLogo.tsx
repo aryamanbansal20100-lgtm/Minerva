@@ -13,17 +13,15 @@ import MinervaMark, { MARK_KEYFRAMES } from "@/components/MinervaMark"
       the whole charm; on the fourth reload it is an obstacle. sessionStorage
       remembers, so a refresh mid-lesson goes straight in.
 
-   The mark draws itself: a stroked circle whose dash offset animates to zero,
-   so the ring is written rather than faded in — the same idea as the product,
-   something being taken down as it happens. Then the letter lifts in, the
-   wordmark follows, and the whole thing scales up and out of the way.
-
-   To use a real logo later: replace the <svg> inside .mark with the exported
-   Canva SVG. Everything else — timing, fade, the once-per-session rule —
-   keeps working untouched. */
+   The prism turns in edge-on, a flat grey beam strikes it, and five bands
+   separate out in order. It then keeps rotating while pushing toward the
+   viewer, so handing over to the app reads as moving through the prism rather
+   than watching it disappear. The wordmark arrives once the spectrum has
+   finished separating, not before — the point of the mark is the separation,
+   and talking over it would waste it. */
 
 const SEEN_KEY = "minerva.splash.seen"
-const TOTAL_MS = 2600
+const TOTAL_MS = 3300
 
 export default function SplashLogo() {
   const [phase, setPhase] = useState<"hidden" | "in" | "out">(() => {
@@ -68,7 +66,7 @@ export default function SplashLogo() {
       className={cn(
         "fixed inset-0 z-[100] grid place-items-center bg-background",
         "transition-[opacity,transform] duration-[450ms] ease-[cubic-bezier(.4,0,.2,1)]",
-        phase === "out" ? "scale-[1.06] opacity-0" : "scale-100 opacity-100",
+        phase === "out" ? "scale-[1.02] opacity-0" : "scale-100 opacity-100",
       )}
       style={{ pointerEvents: phase === "out" ? "none" : "auto" }}
     >
@@ -88,7 +86,7 @@ export default function SplashLogo() {
         {/* the brand glow, breathing once behind the mark */}
         <div
           className="brand-gradient pointer-events-none absolute h-40 w-40 rounded-full blur-3xl"
-          style={{ animation: "minerva-glow 2.6s ease-in-out" }}
+          style={{ animation: "minerva-glow 3.3s ease-in-out" }}
         />
 
         <div className="relative grid place-items-center">
@@ -99,13 +97,13 @@ export default function SplashLogo() {
 
         <div
           className="mt-5 font-display text-[26px] font-[650] tracking-tight"
-          style={{ animation: "minerva-word .55s cubic-bezier(.4,0,.2,1) 1.5s both" }}
+          style={{ animation: "minerva-word .55s cubic-bezier(.4,0,.2,1) 1.95s both" }}
         >
           Minerva
         </div>
         <div
           className="mt-1 font-mono text-[10.5px] uppercase tracking-[0.16em] text-muted-foreground"
-          style={{ animation: "minerva-word .55s cubic-bezier(.4,0,.2,1) 1.7s both" }}
+          style={{ animation: "minerva-word .55s cubic-bezier(.4,0,.2,1) 2.15s both" }}
         >
           notes that write themselves
         </div>

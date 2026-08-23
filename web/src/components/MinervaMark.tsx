@@ -1,31 +1,46 @@
 import { cn } from "@/lib/utils"
 
-/* The Minerva mark.
+/* The Minerva mark: a prism.
 
-   A plain letter M says nothing about the product. This one is the product in
-   one glyph, read left to right — which is also the order it animates in:
+   A letter said nothing about the product. A prism says all of it — one
+   undifferentiated beam goes in, and what leaves the far side is ordered,
+   separated and legible. That is the entire job: forty-five minutes of a
+   teacher talking goes in, and definitions, formulas, examples and homework
+   come out in bands you can actually read.
 
-     sound arrives      two arcs on the left, a voice reaching the microphone
-     it is captured     the M itself, drawn as one continuous stroke, its middle
-                        vertex pulled below where an M's would sit so the shape
-                        comes to a point, the way a nib does
-     it becomes notes   two ruled lines beneath, written out left to right, the
-                        second shorter as a real last line of a paragraph is
+   Left to right, which is also the order it animates in:
 
-   Everything is stroked rather than filled so it stays legible at 32px, and
-   every colour comes from currentColor or the brand gradient so it inherits the
-   theme instead of carrying baked-in hex.
+     the beam      one flat grey line arriving — raw sound, nothing sorted yet
+     the prism     the thing that does the work
+     the spectrum  five bands, cool to warm, separating in order
 
-   `animate` drives the opening sequence. Without it the mark renders static,
-   which is what the sidebar and the favicon need. */
+   Everything is stroked so it survives at 32px. The prism takes the brand
+   gradient; the spectrum is genuinely spectral, because a prism splitting light
+   into five shades of the same violet would be a poor advertisement for sorting
+   things out.
+
+   `animate` runs the opening: the prism turns in edge-on, the beam strikes, the
+   spectrum fans, and then the prism keeps turning while the whole mark pushes
+   toward the viewer. Without it the mark is static, which is what the sidebar
+   and the favicon want. */
 
 type Props = {
   size?: number
   animate?: boolean
   className?: string
-  /** Unique id so two marks on one page do not share gradient definitions. */
+  /** Unique id so two marks on one page cannot share gradient definitions. */
   idPrefix?: string
 }
+
+/* Cool to warm, each with its own delay so the bands separate in sequence the
+   way refraction actually orders them, rather than appearing together. */
+const SPECTRUM = [
+  { d: "M70 60 L118 34", stroke: "#8b5cf6", delay: 0.95 },
+  { d: "M70 60 L118 46", stroke: "#6366f1", delay: 1.03 },
+  { d: "M70 60 L118 58", stroke: "#38bdf8", delay: 1.11 },
+  { d: "M70 60 L118 70", stroke: "#2dd4bf", delay: 1.19 },
+  { d: "M70 60 L118 82", stroke: "#fbbf24", delay: 1.27 },
+]
 
 export default function MinervaMark({
   size = 96,
@@ -34,103 +49,137 @@ export default function MinervaMark({
   idPrefix = "minerva",
 }: Props) {
   const grad = `${idPrefix}-grad`
+  const glass = `${idPrefix}-glass`
 
   return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 120 120"
-      fill="none"
-      className={cn(className)}
-      role="img"
-      aria-label="Minerva"
+    <span
+      className={cn("inline-block", className)}
+      style={
+        /* Perspective belongs on the parent. Without it rotateY reads as a flat
+           horizontal squash instead of something turning in space. */
+        animate
+          ? { perspective: "620px", lineHeight: 0 }
+          : { lineHeight: 0 }
+      }
     >
-      <defs>
-        <linearGradient id={grad} x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0%" stopColor="var(--brand)" />
-          <stop offset="100%" stopColor="var(--brand-2)" />
-        </linearGradient>
-      </defs>
-
-      {/* 1. SOUND ARRIVING — a voice reaching the microphone. Two arcs, the
-             outer one fainter, so it reads as sound rather than a bracket. */}
-      <g stroke={`url(#${grad})`} strokeLinecap="round" fill="none">
-        <path
-          d="M18 48 A 14 14 0 0 1 18 72"
-          strokeWidth="4"
-          opacity="0.9"
-          style={
-            animate
-              ? { animation: "mark-wave .5s cubic-bezier(.4,0,.2,1) .05s both" }
-              : undefined
-          }
-        />
-        <path
-          d="M9 40 A 24 24 0 0 1 9 80"
-          strokeWidth="3.5"
-          opacity="0.45"
-          style={
-            animate
-              ? { animation: "mark-wave .5s cubic-bezier(.4,0,.2,1) .2s both" }
-              : undefined
-          }
-        />
-      </g>
-
-      {/* 2. CAPTURED — the M, one continuous stroke. Its middle vertex sits
-             lower than a normal M so it reads as a nib coming to a point. */}
-      <path
-        d="M38 84 L38 36 L64 66 L90 36 L90 84"
-        stroke={`url(#${grad})`}
-        strokeWidth="7"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        strokeDasharray="180"
+      <svg
+        width={size}
+        height={size}
+        viewBox="0 0 128 120"
+        fill="none"
+        role="img"
+        aria-label="Minerva"
         style={
           animate
-            ? { animation: "mark-draw .9s cubic-bezier(.65,0,.35,1) .35s both" }
+            ? {
+                transformStyle: "preserve-3d",
+                animation:
+                  "prism-enter .85s cubic-bezier(.22,1,.36,1) .05s both, " +
+                  "prism-spin 9s linear 1.6s infinite, " +
+                  "prism-push 2.6s cubic-bezier(.4,0,.2,1) both",
+              }
             : undefined
         }
-      />
+      >
+        <defs>
+          <linearGradient id={grad} x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%" stopColor="var(--brand)" />
+            <stop offset="100%" stopColor="var(--brand-2)" />
+          </linearGradient>
+          {/* A faint interior, so it reads as glass with something happening
+              inside rather than as an empty triangle. */}
+          <linearGradient id={glass} x1="0" y1="0" x2="0.7" y2="1">
+            <stop offset="0%" stopColor="var(--brand)" stopOpacity="0.22" />
+            <stop offset="100%" stopColor="var(--brand-2)" stopOpacity="0.05" />
+          </linearGradient>
+        </defs>
 
-      {/* 3. BECOMING NOTES — ruled lines written out beneath. The second is
-             shorter, the way a real last line of a paragraph stops early. */}
-      <g stroke="currentColor" strokeWidth="5" strokeLinecap="round" opacity="0.55">
+        {/* 1. THE BEAM — deliberately grey. Nothing has been separated yet. */}
         <path
-          d="M38 100 L96 100"
-          strokeDasharray="58"
+          d="M2 52 L44 52"
+          stroke="currentColor"
+          strokeWidth="5"
+          strokeLinecap="round"
+          opacity="0.5"
           style={
             animate
-              ? { animation: "mark-rule .45s cubic-bezier(.4,0,.2,1) 0.95s both" }
+              ? { animation: "prism-beam .5s cubic-bezier(.4,0,.2,1) .55s both" }
               : undefined
           }
         />
+
+        {/* 2. THE PRISM */}
         <path
-          d="M38 112 L74 112"
-          strokeDasharray="36"
+          d="M56 22 L88 80 L24 80 Z"
+          fill={`url(#${glass})`}
+          stroke={`url(#${grad})`}
+          strokeWidth="6"
+          strokeLinejoin="round"
+          strokeDasharray="200"
           style={
             animate
-              ? { animation: "mark-rule .45s cubic-bezier(.4,0,.2,1) 1.12s both" }
+              ? { animation: "prism-draw .95s cubic-bezier(.65,0,.35,1) .1s both" }
               : undefined
           }
         />
-      </g>
-    </svg>
+
+        {/* 3. THE SPECTRUM — separated, ordered, readable. */}
+        <g strokeWidth="5" strokeLinecap="round" fill="none">
+          {SPECTRUM.map((band) => (
+            <path
+              key={band.d}
+              d={band.d}
+              stroke={band.stroke}
+              strokeDasharray="56"
+              style={
+                animate
+                  ? {
+                      animation: `prism-fan .55s cubic-bezier(.22,1,.36,1) ${band.delay}s both`,
+                    }
+                  : undefined
+              }
+            />
+          ))}
+        </g>
+      </svg>
+    </span>
   )
 }
 
 /** Keyframes for the opening sequence. Rendered once by whoever animates. */
 export const MARK_KEYFRAMES = `
-  @keyframes mark-wave {
-    from { opacity: 0; transform: translateX(-6px); }
-    to   { opacity: var(--wave-opacity, .9); transform: translateX(0); }
+  @keyframes prism-enter {
+    from { opacity: 0; transform: rotateY(-95deg) scale(.72); }
+    to   { opacity: 1; transform: rotateY(0deg) scale(1); }
   }
-  @keyframes mark-draw {
-    from { stroke-dashoffset: 180; }
+  @keyframes prism-draw {
+    from { stroke-dashoffset: 200; }
     to   { stroke-dashoffset: 0; }
   }
-  @keyframes mark-rule {
-    from { stroke-dashoffset: 58; opacity: 0; }
-    to   { stroke-dashoffset: 0;  opacity: .55; }
+  @keyframes prism-beam {
+    from { opacity: 0; transform: translateX(-16px); }
+    to   { opacity: .5; transform: translateX(0); }
+  }
+  @keyframes prism-fan {
+    from { stroke-dashoffset: 56; opacity: 0; }
+    to   { stroke-dashoffset: 0;  opacity: 1; }
+  }
+  /* Kept turning once it has arrived, so the mark is never quite still — and
+     pushed toward the viewer as the splash clears, so the hand-off to the app
+     feels like moving through the prism rather than watching it vanish.
+     scale is its own property here so it composes with the rotateY on
+     transform instead of overwriting it. */
+  @keyframes prism-spin {
+    from { transform: rotateY(0deg); }
+    to   { transform: rotateY(360deg); }
+  }
+  @keyframes prism-push {
+    0%   { scale: 1; }
+    58%  { scale: 1.05; }
+    100% { scale: 1.6; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    @keyframes prism-spin { from { transform: none; } to { transform: none; } }
+    @keyframes prism-push { from { scale: 1; } to { scale: 1; } }
   }
 `

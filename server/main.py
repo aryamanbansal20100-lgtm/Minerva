@@ -308,10 +308,35 @@ class Handler(SimpleHTTPRequestHandler):
         origin = self.headers.get("Origin", "")
         if not origin:
             return
+        # Emit at most once per response. do_OPTIONS calls this directly and
+        # end_headers calls it again for /api/ paths, so a preflight used to
+        # carry two Access-Control-Allow-Origin headers -- and a browser
+        # rejects a response with more than one outright, per the CORS spec.
+        # The origin was allowed, the reply was correct, and Chrome binned it
+        # anyway with "contains multiple values". Silent from the server's
+        # side: the logs show a clean 204.
+        if getattr(self, "_cors_done", False):
+            return
+        self._cors_done = True
         allowed = [o.strip().rstrip("/") for o
                    in config.env("EVIE_ALLOWED_ORIGINS", "").split(",") if o.strip()]
         is_managebac = "managebac.com" in origin
         is_allowed = origin.rstrip("/") in allowed
+        # Netlify deploys are allowed by pattern as well as by name. The site
+        # subdomain is chosen at deploy time and every branch preview gets its
+        # own, so an exact allowlist means the front end works only if someone
+        # remembered to type the right host into the dashboard — and when they
+        # did not, every API call failed CORS and the app looked broken with
+        # nothing in the logs to say why.
+        #
+        # This widens who may ASK, never who may READ. Each request still
+        # carries a Firebase ID token that is verified against this project,
+        # and Firestore's rules still scope every row to that student's own
+        # uid; a page on some unrelated netlify.app has no way to mint one,
+        # because sign-in is confined to Firebase's authorised-domain list.
+        is_netlify = bool(re.fullmatch(
+            r"https://[a-z0-9-]+(--[a-z0-9-]+)?\.netlify\.app", origin.rstrip("/")))
+        is_allowed = is_allowed or is_netlify
         if is_managebac or is_allowed:
             self.send_header("Access-Control-Allow-Origin", origin)
             self.send_header("Access-Control-Allow-Headers",
@@ -328,6 +353,10 @@ class Handler(SimpleHTTPRequestHandler):
             # though the app is running perfectly.
             if self.headers.get("Access-Control-Request-Private-Network"):
                 self.send_header("Access-Control-Allow-Private-Network", "true")
+
+    def send_response(self, code, message=None):
+        self._cors_done = False
+        super().send_response(code, message)
 
     def do_OPTIONS(self):
         self.send_response(204)

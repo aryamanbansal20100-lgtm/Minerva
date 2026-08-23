@@ -287,6 +287,26 @@ export function SettingsPage({ state, refresh }: SettingsPageProps) {
       setProbing(false);
     }
   }, []);
+  /* The other direction. A free host wipes its disk on every redeploy, so a
+     device can be signed into the right account and still be showing nothing —
+     the notes are safe in Firestore, this machine just has not fetched them.
+     Merges rather than overwrites: a local copy that is newer always wins. */
+  const restoreNow = useCallback(async () => {
+    setProbing(true);
+    setProbe(null);
+    try {
+      const out = await apiPost<{ ok: boolean; message: string }>(
+        "/api/backup/restore", {},
+      );
+      setProbe(out);
+      apiGet<BackupState>("/api/backup").then(setBackup).catch(() => {});
+    } catch (err) {
+      setProbe({ ok: false, message: err instanceof Error ? err.message : String(err) });
+    } finally {
+      setProbing(false);
+    }
+  }, []);
+
   useEffect(() => {
     let live = true;
     apiGet<BackupState>("/api/backup")
@@ -766,6 +786,14 @@ export function SettingsPage({ state, refresh }: SettingsPageProps) {
               className="btn-brand rounded-lg px-3 py-1.5 text-[13px] font-semibold disabled:opacity-60"
             >
               {probing ? "Uploading…" : "Back up everything now"}
+            </button>
+            <button
+              type="button"
+              onClick={restoreNow}
+              disabled={probing}
+              className="rounded-lg border px-3 py-1.5 text-[13px] text-muted-foreground transition-colors hover:bg-muted disabled:opacity-60"
+            >
+              {probing ? "Fetching…" : "Get my notes from the cloud"}
             </button>
             {probe ? (
               <span className={cn("text-[12.5px]", probe.ok ? "text-ok" : "text-late")}>

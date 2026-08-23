@@ -117,7 +117,24 @@ def pull_if_new() -> dict:
 
     local = store.get_profile()
     if local.get("onboarded") or store.notes(limit=1):
-        return {"pulled": False, "reason": "device already has data"}
+        # The device has something of its own, so the wholesale restore below
+        # would be wrong — but doing nothing is what stranded a term of notes
+        # in Firestore after a redeploy wiped the disk and one new note was
+        # written. Merge instead, in the background: the first request must not
+        # wait on downloading every document, and anything that comes down
+        # appears on the next poll a second later.
+        token, uid_ = cloud.token(), uid
+
+        def merge():
+            cloud.set_token(token)
+            try:
+                store.set_user(uid_)
+                pull_all()
+            except Exception:
+                pass               # best-effort, exactly like the pushes
+
+        threading.Thread(target=merge, daemon=True).start()
+        return {"pulled": False, "reason": "device already has data; merging"}
 
     remote = cloud.get_profile(uid)
     if not remote:
@@ -149,6 +166,78 @@ def pull_if_new() -> dict:
         restored += 1
     return {"pulled": True, "notes": len(notes), "tasks": len(tasks),
             "documents": restored}
+
+
+def pull_all() -> dict:
+    """Bring down everything the cloud has that this device is missing or has
+    an older copy of. A merge, not a restore.
+
+    pull_if_new() deliberately refuses to run on a device that already has any
+    data, so it can never clobber work. That is the right guard for a first
+    sign-in and useless for the case that actually bites: a free host with an
+    ephemeral disk. One redeploy wipes the SQLite file, the student writes a
+    single note on the fresh instance, and from that moment pull_if_new sees
+    "device already has data" and a whole term of notes stays invisible in
+    Firestore for ever.
+
+    So this compares row by row and takes the cloud copy only when the local one
+    is absent or older. A local edit made while offline still wins, because its
+    updated_at is later. Nothing is deleted either way — a row missing locally
+    is treated as missing, never as deleted, since this cannot tell the two
+    apart and losing a note is far worse than keeping a stale one.
+    """
+    uid = store.uid()
+    if uid in ("local", "nobody"):
+        return {"ok": False, "message": "Sign in with Google first."}
+    if not cloud.enabled() or not cloud.token():
+        return {"ok": False, "message": "Cloud backup is not switched on."}
+
+    added = {"notes": 0, "tasks": 0, "documents": 0}
+    skipped = 0
+
+    for row in cloud.fetch(uid, "notes"):
+        nid = row.get("id")
+        if not nid:
+            continue
+        mine = store.get_note(nid)
+        if mine and (mine.get("updated_at") or "") >= (row.get("updated_at") or ""):
+            skipped += 1
+            continue
+        store.restore_note(row)
+        added["notes"] += 1
+
+    have_tasks = {t.get("id") for t in store.tasks(open_only=False)}
+    for row in cloud.fetch(uid, "tasks"):
+        if not row.get("id") or row["id"] in have_tasks:
+            skipped += 1
+            continue
+        store.restore_task(row)
+        added["tasks"] += 1
+
+    # Documents are matched on name, because their ids are minted per device.
+    have_docs = {(d.get("name") or "").lower() for d in store.documents()}
+    for row in cloud.fetch(uid, "documents"):
+        name = (row.get("name") or "").lower()
+        if not name or name in have_docs:
+            skipped += 1
+            continue
+        blob = cloud.download_file(uid, row.get("id", "")) or b""
+        store.add_document(row.get("subject", ""), row.get("name", "file"),
+                           row.get("mime", ""), blob, row.get("text", ""), "cloud")
+        added["documents"] += 1
+
+    profile = cloud.get_profile(uid)
+    if profile and not store.get_profile().get("onboarded"):
+        store.save_profile({k: profile.get(k) for k in (
+            "name", "curriculum", "grade", "school", "city", "country",
+            "subjects", "timetable", "managebac_ics", "onboarded")
+            if k in profile})
+
+    total = sum(added.values())
+    return {"ok": True, **added, "already_had": skipped,
+            "message": (f"Brought down {total} item{'' if total == 1 else 's'} "
+                        f"from the cloud." if total else
+                        "This device is already up to date with the cloud.")}
 
 
 def push_all() -> dict:

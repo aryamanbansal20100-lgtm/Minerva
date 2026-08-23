@@ -605,6 +605,14 @@ class Handler(SimpleHTTPRequestHandler):
             # that actually gets them to the cloud.
             return self._json(sync.push_all())
 
+        if path == "/api/backup/restore":
+            # The other direction: pull down anything this device is missing.
+            # Needed because a free host wipes its disk on every redeploy, and
+            # the first-sign-in pull refuses to run once the device has any
+            # data of its own — so after a wipe plus one new note, everything
+            # else stayed stranded in Firestore.
+            return self._json(sync.pull_all())
+
         if path == "/api/backup/test":
             """Write a probe document, read it back, delete it.
 

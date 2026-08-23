@@ -900,6 +900,75 @@ def group_documents(docs: list[dict]) -> list[dict]:
 # ===========================================================================
 # Practice — the "learn it properly" half of the app
 # ===========================================================================
+
+# How each board actually writes its papers.
+#
+# Not decoration. "Exam-style" without a style is just questions, and a student
+# who has only ever practised generic questions meets the real command terms and
+# the real mark allocations for the first time in the exam hall. These are the
+# published structures, so the practice looks like the paper.
+BOARD_STYLES = {
+    "ib": """- IB tiers its command terms by objective: level 1 knowledge (State,
+  Define, List, Identify), level 2 application (Describe, Outline, Explain,
+  Calculate, Distinguish), level 3 synthesis and evaluation (Evaluate, Discuss,
+  Justify, Examine, "To what extent"). Use the real term, and answer to the
+  level it demands.
+- Marks signal depth, not sentence count: 1-2 marks is a precise statement or
+  definition, 3-4 marks an explanation with a reason, 6-8 marks a developed
+  argument, 10-15 marks a structured multi-perspective response with a
+  judgement. Paper 2 style extended response ends in an evaluation, not a
+  summary.
+- Where the subject uses them, include a diagram instruction in the stem
+  ("using a diagram, explain...") and say in the working what the diagram must
+  show and label.""",
+    "cbse": """- CBSE Class 12 papers run 3 hours for 80 theory marks, and are now
+  roughly half competency-based. Mirror that mix across the set:
+  about 20% multiple choice or Assertion-Reason, about 50% competency-based
+  (case-study, source-based, data-based or visual-based, where a passage, table
+  or figure is given and several parts hang off it), and about 30% short and
+  long constructed answers.
+- Use CBSE's own mark steps: 1 mark objective, 2 marks very short answer,
+  3 marks short answer, 5 marks long answer.
+- For Assertion-Reason, give Assertion (A) and Reason (R) and ask which of the
+  standard four options holds — including the case where both are true but R
+  does not explain A, which is where marks are actually lost.""",
+    "cambridge": """- Cambridge stems build in parts: (a) define or state, (b) explain
+  or calculate, (c) analyse, (d) discuss or evaluate — each part worth more than
+  the last, off one shared context. Write them that way.
+  - Mark allocations run 1-2 for recall, 4-6 for explanation with development,
+  8-12 for evaluation carrying a conclusion.
+  - Where the paper is data-response, give the data (a short extract, table or
+  figure) inside the question rather than assuming it.""",
+    "icse": """- ICSE papers reward detail and precise terminology, with questions
+  split into short compulsory parts and longer structured questions carrying
+  internal choice. Use full sentences in the mark scheme and expect named
+  examples.""",
+    "": """- Use the ordinary command terms of the subject (Define, Explain,
+  Calculate, Analyse, Evaluate), mark allocations proportional to the depth
+  asked for, and a mark scheme detailed enough to self-mark against.""",
+}
+
+
+def board_style(curriculum: str) -> str:
+    """Match the student's stated curriculum to a paper style, loosely.
+
+    Students type this themselves, so it arrives as "IB", "IBDP", "IB Diploma",
+    "cbse board", "Cambridge IGCSE" and everything in between. Substring
+    matching on a lowered string beats an exact lookup that silently falls
+    through to generic for anyone who typed it a little differently.
+    """
+    c = (curriculum or "").lower()
+    if "ib" in c.split() or "ibdp" in c or "diploma programme" in c or c.startswith("ib"):
+        return BOARD_STYLES["ib"]
+    if "cbse" in c or "ncert" in c:
+        return BOARD_STYLES["cbse"]
+    if "igcse" in c or "cambridge" in c or "a level" in c or "a-level" in c or "cie" in c:
+        return BOARD_STYLES["cambridge"]
+    if "icse" in c or "isc" in c:
+        return BOARD_STYLES["icse"]
+    return BOARD_STYLES[""]
+
+
 PRACTICE = """You write exam practice for a {curriculum} student in {grade},
 studying {subject}.
 
@@ -920,8 +989,17 @@ Return JSON only:
       "trap":str}}
   ]}}
 
+Write them the way {curriculum} writes them. Past papers have a house style —
+the command terms, the mark allocations, the way a stem is set up, the order a
+multi-part question builds in — and a student who practises in that style walks
+into the exam recognising the paper. Match it:
+
+{board}
+
 Rules:
 - {count} questions, ordered easiest to hardest.
+- Where the paper uses multi-part questions (a), (b), (c) building on one stem,
+  write them that way rather than as unrelated singles.
 - "command" is the course's own command term — Define, Explain, Calculate,
   Analyse, Evaluate, Compare, Justify, Outline.
 - "marks" is realistic for that command term (Define 2, Explain 3-4,
@@ -949,16 +1027,31 @@ def practice(notes_text: str, profile: dict, subject: str, topic: str,
         out["_failed"] = "there is not enough in these notes yet to practise from"
         return out
 
+    try:
+        want = int(count or 5)
+    except (TypeError, ValueError):
+        want = 5
+    # 20 is the real ceiling now, not 10. A full past-paper-length set is the
+    # point of asking for 20, and the old clamp silently handed back 10 —
+    # the request looked honoured and was not.
+    want = max(3, min(20, want))
+
+    curriculum = profile.get("curriculum") or "their curriculum"
     system = PRACTICE.format(
-        curriculum=profile.get("curriculum") or "their curriculum",
+        curriculum=curriculum,
         grade=profile.get("grade") or "secondary",
         subject=subject or "this subject",
-        count=max(3, min(10, int(count or 5))))
+        board=board_style(curriculum),
+        count=want)
 
-    out = gemini_json(system, notes_text[:60000], max_tokens=8000) if gemini_ready() else None
+    # Roughly 700 tokens per question with its full mark scheme and working,
+    # with headroom. Left at a flat 8000 a 20-question set was cut off
+    # mid-JSON and parsed to nothing.
+    budget = min(32000, 2000 + 700 * want)
+    out = gemini_json(system, notes_text[:60000], max_tokens=budget) if gemini_ready() else None
     if not out:
         out = json_call(system, notes_text[:9000], fallback={}, model=big(),
-                        max_tokens=3000)
+                        max_tokens=min(8000, 1200 + 500 * want))
         if out.get("_failed"):
             bad = dict(fallback)
             bad["_failed"] = out["_failed"]
@@ -1118,7 +1211,7 @@ Rules:
   it is worth marks.
 - Preserve every number, name, formula and date exactly.
 - Write maths the way it is written on paper, NOT in LaTeX. No dollar signs, no
-  backslash commands, no braces. Write "%ΔQs / %ΔP", not "$\% \Delta Q_s / \% \Delta P$".
+  backslash commands, no braces. Write "%ΔQs / %ΔP", not "$\\% \\Delta Q_s / \\% \\Delta P$".
   Write "Pold", "Qnew", "x²", "√16", "≤", "≥", "×", "∞", "Δ" as the characters
   themselves. A student reading the note should see notation, not code.
 - Turn spoken informality into formal written notes, but do not shorten the

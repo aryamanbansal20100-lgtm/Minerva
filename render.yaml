@@ -32,6 +32,15 @@ services:
         sync: false
       - key: FIREBASE_API_KEY
         sync: false
+      # NOT a secret: the project id is already visible in the browser bundle
+      # (web/src/lib/firebase.ts) because Firebase needs it client-side. It is
+      # a value rather than sync:false precisely so it cannot be forgotten —
+      # when it was missing, cloud.enabled() returned False and the server
+      # mirrored nothing to Firestore while reporting no error at all. Every
+      # redeploy then wiped the ephemeral disk and the account looked factory
+      # reset. Must match projectId in web/src/lib/firebase.ts.
+      - key: FIREBASE_PROJECT
+        value: "note-ta"
       # The Netlify address of the front end, so CORS lets it through.
       # e.g. https://minerva.netlify.app
       - key: EVIE_ALLOWED_ORIGINS

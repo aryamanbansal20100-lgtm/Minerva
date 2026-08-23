@@ -45,7 +45,7 @@ def token() -> str:
 
 
 def project() -> str:
-    return config.env("FIREBASE_PROJECT", "")
+    return config.env("FIREBASE_PROJECT", config.DEFAULT_FIREBASE_PROJECT)
 
 
 def enabled() -> bool:

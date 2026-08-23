@@ -5,6 +5,29 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
+# The Firebase project id. Public by definition — it ships inside the browser
+# bundle (web/src/lib/firebase.ts) because Firebase needs it client-side — so
+# defaulting it here leaks nothing, and it removes an entire class of outage.
+#
+# It used to come only from the environment. A host where nobody had typed it in
+# got an empty string, cloud.enabled() went False, and the server mirrored
+# nothing to Firestore without ever raising: notes saved fine, then vanished on
+# the next redeploy because the free tier's disk is ephemeral. Silent, and
+# indistinguishable from a working backup until the day you needed it.
+#
+# Override with FIREBASE_PROJECT if the deployment ever points at another
+# project; it must match projectId in web/src/lib/firebase.ts either way.
+DEFAULT_FIREBASE_PROJECT = "note-ta"
+
+# The Firebase Web API key, for the same reason and with the same caveat. This
+# is NOT a credential: Google documents web API keys as public identifiers that
+# belong in client code, and this exact string is already committed in
+# web/src/lib/firebase.ts and shipped to every browser. What actually protects
+# the data is the Firestore security rules plus the authorised-domain list —
+# holding this key gets an attacker nothing a page visitor does not already
+# have. The Groq and Gemini keys are real secrets and stay in the environment.
+DEFAULT_FIREBASE_API_KEY = "AIzaSyAw8zOGiC3q5lFvGIrJDPlNrHTiUl4KbhQ"
+
 ROOT = Path(__file__).resolve().parent.parent
 ENV_PATH = ROOT / ".env"
 _loaded = False

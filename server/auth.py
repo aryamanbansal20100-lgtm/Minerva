@@ -40,14 +40,14 @@ def required() -> bool:
 
 
 def api_key() -> str:
-    return config.env("FIREBASE_API_KEY")
+    return config.env("FIREBASE_API_KEY", config.DEFAULT_FIREBASE_API_KEY)
 
 
 def status() -> dict:
     return {
         "required": required(),
         "configured": bool(api_key()),
-        "project": config.env("FIREBASE_PROJECT", ""),
+        "project": config.env("FIREBASE_PROJECT", config.DEFAULT_FIREBASE_PROJECT),
         "reason": "" if api_key() else
                   "no FIREBASE_API_KEY in .env — sign-in cannot be verified",
     }

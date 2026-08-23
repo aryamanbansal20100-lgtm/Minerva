@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react"
 import { cn } from "@/lib/utils"
+import MinervaMark, { MARK_KEYFRAMES } from "@/components/MinervaMark"
 
 /* The opening animation.
 
@@ -22,7 +23,7 @@ import { cn } from "@/lib/utils"
    keeps working untouched. */
 
 const SEEN_KEY = "minerva.splash.seen"
-const TOTAL_MS = 2100
+const TOTAL_MS = 2600
 
 export default function SplashLogo() {
   const [phase, setPhase] = useState<"hidden" | "in" | "out">(() => {
@@ -72,15 +73,7 @@ export default function SplashLogo() {
       style={{ pointerEvents: phase === "out" ? "none" : "auto" }}
     >
       <style>{`
-        @keyframes minerva-ring {
-          from { stroke-dashoffset: 302; }
-          to   { stroke-dashoffset: 0; }
-        }
-        @keyframes minerva-letter {
-          0%   { opacity: 0; transform: translateY(9px) scale(.86); }
-          60%  { opacity: 1; transform: translateY(-2px) scale(1.03); }
-          100% { opacity: 1; transform: translateY(0) scale(1); }
-        }
+        ${MARK_KEYFRAMES}
         @keyframes minerva-word {
           from { opacity: 0; transform: translateY(7px); letter-spacing: .12em; }
           to   { opacity: 1; transform: translateY(0);  letter-spacing: -.02em; }
@@ -95,51 +88,24 @@ export default function SplashLogo() {
         {/* the brand glow, breathing once behind the mark */}
         <div
           className="brand-gradient pointer-events-none absolute h-40 w-40 rounded-full blur-3xl"
-          style={{ animation: "minerva-glow 2.1s ease-in-out" }}
+          style={{ animation: "minerva-glow 2.6s ease-in-out" }}
         />
 
         <div className="relative grid place-items-center">
-          {/* THE MARK — swap this svg for the exported Canva logo */}
-          <svg width="96" height="96" viewBox="0 0 104 104" fill="none">
-            <defs>
-              <linearGradient id="minerva-stroke" x1="0" y1="0" x2="1" y2="1">
-                <stop offset="0%" stopColor="var(--brand)" />
-                <stop offset="100%" stopColor="var(--brand-2)" />
-              </linearGradient>
-            </defs>
-            <circle
-              cx="52" cy="52" r="48"
-              stroke="url(#minerva-stroke)"
-              strokeWidth="3.5"
-              strokeLinecap="round"
-              strokeDasharray="302"
-              style={{
-                animation: "minerva-ring 1.15s cubic-bezier(.65,0,.35,1) forwards",
-                transform: "rotate(-90deg)",
-                transformOrigin: "52px 52px",
-              }}
-            />
-          </svg>
-
-          <span
-            className="brand-gradient absolute bg-clip-text font-display text-[42px] font-[650] text-transparent"
-            style={{
-              animation: "minerva-letter .6s cubic-bezier(.34,1.56,.64,1) .5s both",
-            }}
-          >
-            M
-          </span>
+          {/* The mark tells the story on its own: sound arriving, captured at
+              the nib, becoming written lines. */}
+          <MinervaMark size={120} animate idPrefix="splash" />
         </div>
 
         <div
           className="mt-5 font-display text-[26px] font-[650] tracking-tight"
-          style={{ animation: "minerva-word .55s cubic-bezier(.4,0,.2,1) .85s both" }}
+          style={{ animation: "minerva-word .55s cubic-bezier(.4,0,.2,1) 1.5s both" }}
         >
           Minerva
         </div>
         <div
           className="mt-1 font-mono text-[10.5px] uppercase tracking-[0.16em] text-muted-foreground"
-          style={{ animation: "minerva-word .55s cubic-bezier(.4,0,.2,1) 1.05s both" }}
+          style={{ animation: "minerva-word .55s cubic-bezier(.4,0,.2,1) 1.7s both" }}
         >
           notes that write themselves
         </div>

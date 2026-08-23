@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react"
 import { cn } from "@/lib/utils"
+import MinervaMark from "@/components/MinervaMark"
 
 /* The logged-out experience — and the whole marketing site, folded into the app
    so there is ONE thing at one URL. A visitor lands here, reads, and signs in
@@ -299,7 +300,7 @@ export default function LandingPage({ onSignIn, signingIn, error }: Props) {
       <header className="sticky top-0 z-50 border-b border-border/70 bg-background/80 backdrop-blur-lg">
         <div className="mx-auto flex w-[92%] max-w-6xl items-center justify-between py-3.5">
           <button onClick={() => goto("home")} className="flex items-center gap-2.5">
-            <span className="grid h-8 w-8 place-items-center rounded-lg bg-gradient-to-br from-brand to-brand-2 font-display text-[16px] font-semibold text-white shadow-sm">M</span>
+            <MinervaMark size={32} idPrefix="nav" className="text-foreground" />
             <span className="font-display text-[20px] font-semibold tracking-tight">Minerva</span>
           </button>
 
@@ -512,7 +513,7 @@ export default function LandingPage({ onSignIn, signingIn, error }: Props) {
       <footer className="border-t">
         <div className="mx-auto flex w-[92%] max-w-6xl flex-wrap items-center justify-between gap-4 py-8">
           <div className="flex items-center gap-2.5">
-            <span className="grid h-7 w-7 place-items-center rounded-lg bg-gradient-to-br from-brand to-brand-2 font-display text-[14px] font-semibold text-white">M</span>
+            <MinervaMark size={28} idPrefix="foot" className="text-foreground" />
             <span className="font-display text-[17px] font-semibold">Minerva</span>
           </div>
           <p className="text-[13.5px] text-muted-foreground">Notes that write themselves while you sit in class.</p>

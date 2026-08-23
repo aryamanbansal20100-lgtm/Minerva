@@ -94,7 +94,11 @@ export type PracticePageProps = {
 
 /* ------------------------------------------------------------------ pieces */
 
-const COUNTS = [3, 5, 8] as const;
+/* Multiples of five, because that is how a student thinks about a revision
+   session — "do twenty questions" — not 3, 5, 8. Twenty is a full past-paper
+   sitting and takes noticeably longer to generate, which the panel warns
+   about rather than leaving you staring at a spinner. */
+const COUNTS = [5, 10, 15, 20] as const;
 
 const FIELD_LABEL =
   "mb-1.5 block text-[11px] font-bold uppercase tracking-[0.08em] text-muted-foreground";
@@ -756,6 +760,14 @@ export function PracticePage({ initial, onOpenNote }: PracticePageProps) {
                 </button>
               ))}
             </div>
+            {count >= 15 ? (
+              /* Twenty questions with full mark schemes is a lot of writing for
+                 the model. Saying so up front is the difference between waiting
+                 and wondering whether it has hung. */
+              <span className="text-[11px] text-muted-foreground">
+                a full set — give it a minute
+              </span>
+            ) : null}
           </div>
 
           <button

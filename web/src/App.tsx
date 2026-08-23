@@ -14,6 +14,7 @@ import AssessmentsPage from "@/pages/AssessmentsPage"
 import PracticePage from "@/pages/PracticePage"
 import StudyNudge from "@/components/StudyNudge"
 import AskDock from "@/components/AskDock"
+import MinervaMark from "@/components/MinervaMark"
 
 /* The shell: a fixed sidebar and a scrolling pane, with the student's identity
    at the top — never the app's name. Routing is by hash, so there is no extra
@@ -355,6 +356,7 @@ export default function App() {
               <path d="M4 6h16M4 12h16M4 18h16" />
             </svg>
           </button>
+          <MinervaMark size={22} idPrefix="bar" className="text-foreground" />
           <span className="text-[14px] font-semibold tracking-tight">Minerva</span>
           {openTasks > 0 ? (
             <span className="ml-auto rounded-full bg-warn/15 px-2 py-0.5 text-[11px] font-medium tabular-nums text-warn">

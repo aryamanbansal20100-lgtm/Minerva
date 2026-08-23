@@ -1,9 +1,8 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100" height="100" role="img" aria-label="Minerva">
-  <!-- The Minerva mark at tab size: a prism splitting one beam into an ordered
-       spectrum. The full mark (web/src/components/MinervaMark.tsx) fans five
-       bands; at 16px five separate strokes turn to mush, so this keeps four and
-       thickens them. Filled ground so the shape holds against a light or a dark
-       tab strip. -->
+  <!-- The Minerva mark at tab size: speech resolving into writing, read top to
+       bottom. The full mark (web/src/components/MinervaMark.tsx) uses four
+       lines; at 16px four turn to mush, so this keeps three and widens the
+       spacing. Filled ground so the shape holds on a light or a dark tab. -->
   <defs>
     <linearGradient id="mg" x1="0" y1="0" x2="1" y2="1">
       <stop offset="0%" stop-color="#7c5cf0"/>
@@ -11,16 +10,9 @@
     </linearGradient>
   </defs>
   <rect width="100" height="100" rx="23" fill="url(#mg)"/>
-  <!-- the beam arriving -->
-  <path d="M8 46 L30 46" stroke="#fff" stroke-width="6" stroke-linecap="round" opacity=".55"/>
-  <!-- the prism -->
-  <path d="M46 24 L70 70 L22 70 Z" fill="#fff" fill-opacity=".16"
-        stroke="#fff" stroke-width="6.5" stroke-linejoin="round"/>
-  <!-- the spectrum leaving, cool to warm -->
-  <g stroke-width="5.5" stroke-linecap="round" fill="none">
-    <path d="M58 52 L92 34" stroke="#c4b5fd"/>
-    <path d="M58 52 L94 45" stroke="#a5b4fc"/>
-    <path d="M58 52 L94 57" stroke="#7dd3fc"/>
-    <path d="M58 52 L90 69" stroke="#fcd34d"/>
+  <g stroke="#fff" stroke-width="7" stroke-linecap="round" stroke-linejoin="round" fill="none">
+    <path d="M18 33 L31 20 L42 46 L54 22 L66 42 L82 33"/>
+    <path d="M18 58 L36 51 L54 64 L82 57" opacity=".78"/>
+    <path d="M18 80 L64 80" opacity=".92"/>
   </g>
 </svg>

@@ -367,7 +367,7 @@ export function identityOf(user: User | null): {
   photo: string;
   initial: string;
 } {
-  if (!user) return { name: "Minerva", email: "—", photo: "", initial: "E" };
+  if (!user) return { name: "Minerva", email: "—", photo: "", initial: "M" };
   const email = user.email || "";
   const name = user.displayName || email.split("@")[0] || "You";
   return {

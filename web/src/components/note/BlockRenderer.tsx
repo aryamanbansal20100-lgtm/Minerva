@@ -497,6 +497,23 @@ function wrap(text: unknown, maxChars: number, maxLines = 4): string[] {
   return lines.length ? lines : [""];
 }
 
+/* A model that is reasoning about content, not about our schema, writes the
+   natural shape: a comparison as {left,right} objects, a tree node as
+   {label,children}. wrap() would turn those into "[object Object]", so every
+   such diagram rendered as an empty titled box across every subject. Pull the
+   readable string out of whatever shape arrived. */
+function asText(v: unknown): string {
+  if (v == null) return "";
+  if (typeof v === "string") return v;
+  if (typeof v === "number" || typeof v === "boolean") return String(v);
+  if (typeof v === "object") {
+    const o = v as Record<string, unknown>;
+    const s = o.label ?? o.text ?? o.title ?? o.name ?? o.value;
+    if (typeof s === "string") return s;
+  }
+  return "";
+}
+
 function TextLines({
   lines,
   x,
@@ -806,13 +823,29 @@ const mindmap: Draw = (spec) => {
 
 /* ---- hierarchy: a tree --------------------------------------------------- */
 const hierarchy: Draw = (spec) => {
-  const kids = (spec.children || []).slice(0, 6);
+  /* Documented shape: root is a string, children is the top-level array. The
+     shape the model actually writes: root is an object carrying its own label
+     and children. Reading only the top-level `children` found nothing in that
+     case, so the tree rendered as an empty box. Accept both. */
+  const rootRaw = (spec as unknown as Record<string, unknown>).root;
+  const rootObj =
+    rootRaw && typeof rootRaw === "object"
+      ? (rootRaw as Record<string, unknown>)
+      : null;
+  const kids = (((rootObj?.children as unknown[]) || spec.children || []) as {
+    label?: unknown;
+    children?: unknown[];
+  }[]).slice(0, 6);
   if (!kids.length) return null;
   const colW = 210;
   const W = Math.max(560, kids.length * colW);
   const deepest = Math.max(...kids.map((k) => (k.children || []).length), 0);
   const H = 150 + deepest * 26;
-  const rootLines = wrap(spec.root || spec.title || "Topic", 26, 2);
+  const rootLines = wrap(
+    asText(rootObj ? rootObj.label : rootRaw) || spec.title || "Topic",
+    26,
+    2,
+  );
   const rw = 210;
   const rh = Math.max(46, 20 + rootLines.length * 16);
   return {
@@ -830,7 +863,7 @@ const hierarchy: Draw = (spec) => {
         />
         {kids.map((k, i) => {
           const cx = (i + 0.5) * (W / kids.length);
-          const lines = wrap(k.label, 24, 2);
+          const lines = wrap(asText(k.label ?? k), 24, 2);
           const bw = Math.min(colW - 24, 186);
           const bh = Math.max(38, 16 + lines.length * 16);
           const by = 92;
@@ -854,7 +887,7 @@ const hierarchy: Draw = (spec) => {
                   fontSize={11.5}
                   fill={DIM}
                 >
-                  {wrap(child, 28, 1)[0]}
+                  {wrap(asText(child), 28, 1)[0]}
                 </text>
               ))}
             </g>
@@ -912,11 +945,38 @@ const timeline: Draw = (spec) => {
 
 /* ---- compare: two columns against shared aspects ------------------------ */
 const compare: Draw = (spec) => {
-  const rows = (spec.rows || []).slice(0, 9);
+  /* Two shapes both mean "a two-column comparison". The documented one is
+     rows:[{aspect,left,right}] with a column per side. The one the model
+     actually reaches for is left:{title,items[]} and right:{title,items[]} --
+     a list down each side. Accept either; the second is paired into rows by
+     position, and the empty aspect column is dropped so it does not leave a
+     blank 150px gutter. */
+  const specAny = spec as unknown as Record<string, unknown>;
+  let cols = spec.columns as string[] | undefined;
+  let rows = (spec.rows || []).map((r) => ({
+    aspect: asText(r.aspect),
+    left: asText(r.left),
+    right: asText(r.right),
+  }));
+  if (!rows.length && (specAny.left || specAny.right)) {
+    const lo = (specAny.left || {}) as Record<string, unknown>;
+    const ro = (specAny.right || {}) as Record<string, unknown>;
+    cols = cols || [asText(lo) || "A", asText(ro) || "B"];
+    const li = ((lo.items as unknown[]) || []).map(asText);
+    const ri = ((ro.items as unknown[]) || []).map(asText);
+    const n = Math.max(li.length, ri.length);
+    rows = Array.from({ length: n }, (_, i) => ({
+      aspect: "",
+      left: li[i] || "",
+      right: ri[i] || "",
+    }));
+  }
+  rows = rows.slice(0, 9);
   if (!rows.length) return null;
-  const cols = spec.columns || ["A", "B"];
+  cols = cols || ["A", "B"];
+  const hasAspect = rows.some((r) => r.aspect.trim());
   const W = 700;
-  const aspectW = 150;
+  const aspectW = hasAspect ? 150 : 0;
   const colW = (W - aspectW) / 2;
   const heights = rows.map((r) =>
     Math.max(
@@ -934,15 +994,17 @@ const compare: Draw = (spec) => {
     return (
       <g key={i}>
         {i > 0 && <line x1={0} y1={top} x2={W} y2={top} stroke={LINE} strokeWidth={1} />}
-        <TextLines
-          lines={wrap(r.aspect, 20, 3)}
-          x={12}
-          y={top + h / 2}
-          anchor="start"
-          weight={600}
-          size={12.5}
-          fill={INK}
-        />
+        {hasAspect ? (
+          <TextLines
+            lines={wrap(r.aspect, 20, 3)}
+            x={12}
+            y={top + h / 2}
+            anchor="start"
+            weight={600}
+            size={12.5}
+            fill={INK}
+          />
+        ) : null}
         <TextLines lines={wrap(r.left, 30, 4)} x={aspectW + colW / 2} y={top + h / 2} size={12.5} />
         <TextLines
           lines={wrap(r.right, 30, 4)}
@@ -962,7 +1024,7 @@ const compare: Draw = (spec) => {
         <TextLines lines={[cols[0] || "A"]} x={aspectW + colW / 2} y={19} weight={700} size={13} />
         <TextLines lines={[cols[1] || "B"]} x={aspectW + colW * 1.5} y={19} weight={700} size={13} />
         {body}
-        <line x1={aspectW} y1={0} x2={aspectW} y2={H} stroke={LINE} />
+        {hasAspect ? <line x1={aspectW} y1={0} x2={aspectW} y2={H} stroke={LINE} /> : null}
         <line x1={aspectW + colW} y1={0} x2={aspectW + colW} y2={H} stroke={LINE} />
       </>
     ),
@@ -999,14 +1061,45 @@ const graph: Draw = (spec) => {
      draws both axes through it. The model asks for it with
      "origin":"centre". */
   const centred = spec.origin === "centre";
-  const lo = centred ? -100 : 0;
-  const span = centred ? 200 : 100;
-  const clamp = (v: number) => Math.max(lo, Math.min(100, Number(v) || 0));
-  const px = (v: number) => L + ((clamp(v) - lo) / span) * (W - L - R);
-  const py = (v: number) => H - B - ((clamp(v) - lo) / span) * (H - T - B);
-  // Where the axes cross: the corner normally, the middle when centred.
-  const ax = centred ? px(0) : L;
-  const ay = centred ? py(0) : H - B;
+
+  /* Fit the frame to the data, rather than assuming the model normalised it.
+
+     The prompt asks for points on a 0-100 scale, but a model that is thinking
+     about physics naturally writes the real numbers -- Example 3.4 emitted the
+     force-distance line as (0,2)->(4,10). Clamped to 0-100 that became a stub
+     in the bottom-left corner: a labelled, empty-looking graph. Reading the
+     actual extent of the points and mapping THAT to the frame draws the line
+     correctly whether it arrived as 0-100, 0-10, or -60..90. */
+  const all = lines.flatMap((l) =>
+    (l.points || []).map((p) => (Array.isArray(p) ? p : [p.x, p.y])),
+  );
+  const xs = all.map((p) => Number(p[0]) || 0);
+  const ys = all.map((p) => Number(p[1]) || 0);
+
+  let x0: number, x1: number, y0: number, y1: number;
+  if (centred) {
+    // Symmetric about zero on both axes, so the origin sits dead centre and a
+    // curve and its reflection are mirror images across a visible axis.
+    const m = Math.max(1, ...xs.map(Math.abs), ...ys.map(Math.abs)) * 1.08;
+    x0 = -m; x1 = m; y0 = -m; y1 = m;
+  } else {
+    // Corner: always include the origin so a baseline and the area under a
+    // curve read correctly. Pad only the far side so the curve does not touch
+    // the frame edge.
+    x0 = Math.min(0, ...xs); y0 = Math.min(0, ...ys);
+    x1 = Math.max(...xs, x0 + 1); y1 = Math.max(...ys, y0 + 1);
+    x1 += (x1 - x0) * 0.06; y1 += (y1 - y0) * 0.06;
+  }
+  // A single vertical or horizontal line has zero span on one axis; widen it so
+  // the division is safe and the line sits sensibly in the frame.
+  if (x1 - x0 < 1e-6) { x0 -= 1; x1 += 1; }
+  if (y1 - y0 < 1e-6) { y0 -= 1; y1 += 1; }
+
+  const px = (v: number) => L + ((( Number(v) || 0) - x0) / (x1 - x0)) * (W - L - R);
+  const py = (v: number) => H - B - ((( Number(v) || 0) - y0) / (y1 - y0)) * (H - T - B);
+  // Where the axes cross: the frame corner unless zero is inside the range.
+  const ax = x0 < 0 && x1 > 0 ? px(0) : L;
+  const ay = y0 < 0 && y1 > 0 ? py(0) : H - B;
 
   return {
     w: W,
@@ -1279,9 +1372,22 @@ export const BlockRenderer = memo(function BlockRenderer({
 }) {
   const list = (blocks || []).filter((b) => {
     if (!b || typeof b !== "object") return false;
-    /* A diagram whose spec cannot be drawn leaves no empty card behind. */
+    /* A diagram whose spec cannot be drawn leaves no empty card behind.
+
+       Checking only that the KIND is known was not enough: a "graph" with no
+       usable line, or a "flow" with no nodes, is a known kind that still draws
+       nothing, and it left a titled, empty box (the "Forces in vertical
+       circular motion" card). Actually attempt the draw and keep the block only
+       if it produces something. */
     if (b.type === "diagram") {
-      return !!b.spec && !!KINDS[String(b.spec.kind || "").toLowerCase()];
+      if (!b.spec) return false;
+      const draw = KINDS[String(b.spec.kind || "").toLowerCase()];
+      if (!draw) return false;
+      try {
+        return draw(b.spec, "probe") != null;
+      } catch {
+        return false;
+      }
     }
     return true;
   });

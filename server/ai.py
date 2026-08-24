@@ -513,7 +513,7 @@ DIAGRAM_KINDS = ("flow", "cycle", "mindmap", "hierarchy", "timeline",
 DIAGRAM_FIELDS = ("kind", "title", "nodes", "edges", "steps", "items",
                   "rows", "columns", "branches", "centre", "center",
                   "points", "children", "root", "lines", "x", "y",
-                  "note", "left", "right", "labels")
+                  "note", "left", "right", "labels")  # left/right: compare
 
 
 # Models reach for Mermaid whatever the schema says — it is what they have seen
@@ -604,9 +604,11 @@ def normalise_blocks(blocks) -> list:
             # thrown away without a word — which is why notes so often came back
             # with no diagram at all.
             # Mermaid arrives as text under content/mermaid/code/text.
-            if not any(spec.get(k) for k in ("nodes", "rows", "branches",
-                                             "points", "children", "lines",
-                                             "steps", "items")):
+            _nested_root = isinstance(spec.get("root"), dict) and                 spec["root"].get("children")
+            _two_col = spec.get("left") or spec.get("right")
+            if not (_nested_root or _two_col or any(spec.get(k) for k in (
+                    "nodes", "rows", "branches", "points", "children",
+                    "lines", "steps", "items"))):
                 for key in ("content", "mermaid", "code", "text", "diagram",
                             "definition", "chart"):
                     got = mermaid_to_spec(b.get(key) or spec.get(key) or "")
@@ -617,17 +619,19 @@ def normalise_blocks(blocks) -> list:
 
             payload = ("nodes", "steps", "items", "rows", "branches", "points",
                        "children", "lines")
-            if isinstance(spec, dict) and any(spec.get(k) for k in payload):
+            _keep = isinstance(spec, dict) and (
+                any(spec.get(k) for k in payload) or _two_col or _nested_root)
+            if _keep:
                 if not spec.get("kind") and b.get("kind") not in (None, "diagram"):
                     spec["kind"] = str(b.get("kind"))
                 if str(spec.get("kind") or "") not in DIAGRAM_KINDS:
                     # Guess from the shape of the data rather than defaulting
                     # everything to "flow", which drew nonsense for a graph.
                     spec["kind"] = ("graph" if spec.get("lines") else
-                                    "compare" if spec.get("rows") else
+                                    "compare" if spec.get("rows") or _two_col else
                                     "mindmap" if spec.get("branches") else
                                     "timeline" if spec.get("points") else
-                                    "hierarchy" if spec.get("children") else
+                                    "hierarchy" if spec.get("children") or _nested_root else
                                     "cycle" if spec.get("steps") else "flow")
                 out.append({"type": "diagram", "spec": spec})
             continue

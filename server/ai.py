@@ -448,6 +448,12 @@ With "origin":"centre":
   y=1/x     two separate lines, one per branch: [[8,95],[15,55],[30,28],[60,14],[95,9]]
             and [[-8,-95],[-15,-55],[-30,-28],[-60,-14],[-95,-9]]
   modulus   [[-70,70],[0,0],[70,70]]
+Physics motion and waves live in the same space and go negative just as often:
+  ball thrown up, velocity-time  [[0,80],[20,48],[40,16],[50,0],[60,-16],[80,-48],[100,-80]]
+                                 (a straight line crossing zero as it turns)
+  SHM / a wave, y against t      [[0,0],[12,60],[25,85],[38,60],[50,0],[62,-60],[75,-85],[88,-60],[100,0]]
+  radioactive decay / cooling    "origin":"corner": [[0,95],[15,60],[30,38],[50,18],[75,7],[100,3]]
+  charging capacitor             "origin":"corner": [[0,0],[15,45],[30,68],[50,85],[75,95],[100,98]]
 
 A lesson that defines several distinct cases needs ONE GRAPH PER CASE, not one
 overall — five categories of elasticity means five graphs, and six standard
@@ -473,12 +479,16 @@ Rules that matter:
   of them has lost the lesson. There is no cap. The only rule is that each
   diagram carries something words alone do not: the shape of a curve, a
   process, a comparison, a hierarchy, a cycle. Never diagram a list.
-- For maths, the graphs ARE the content, not an illustration of it. Every
-  standard curve named (y=x², x³, √x, 1/x, 1/x², modulus) and every
-  transformation demonstrated (each translation, reflection, stretch) is its
-  own graph block, placed in the section that explains it. Before and after a
-  transformation belong on the SAME graph as two labelled lines, one dashed for
-  the original, so the change is visible rather than described.
+- For MATHS and PHYSICS the graphs ARE the content, not an illustration of it.
+  In maths, every standard curve named (y=x², x³, √x, 1/x, 1/x², modulus) and
+  every transformation shown (each translation, reflection, stretch) is its own
+  graph, with before-and-after on the SAME graph as two labelled lines, the
+  original dashed. In physics, every relationship drawn is its own graph too —
+  velocity-time, displacement-time, acceleration-time, force-extension,
+  stress-strain, current-voltage, decay and charging curves, wave and SHM
+  shapes. A motion graph that crosses zero (a body that stops and reverses, an
+  oscillation) needs "origin":"centre"; a quantity that only decays or grows
+  stays in "corner". Draw the graph the teacher drew, not a sentence about it.
 - "gaps" is what to ask the TEACHER next lesson — real questions about the
   subject, the kind a good student writes in the margin. For example: "does
   this formula still hold when the collision is inelastic?", "which of these

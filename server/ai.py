@@ -258,7 +258,7 @@ def gemini_json(system: str, user: str, max_tokens: int = 16384) -> dict | None:
         try:
             with net.urlopen(req, timeout=180) as resp:
                 out = json.loads(resp.read().decode("utf-8"))
-            text = out["candidates"][0]["content"]["parts"][0]["text"]
+            text = net.gemini_text(out)
             start, end = text.find("{"), text.rfind("}")
             parsed = json.loads(text[start:end + 1])
             _gemini_model = name

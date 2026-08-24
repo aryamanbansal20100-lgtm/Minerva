@@ -64,3 +64,56 @@ def status() -> dict:
                  "extension checks relaxed. Certificates are still verified."
                  if _relaxed else ""),
     }
+
+
+class GeminiEmpty(Exception):
+    """Gemini replied, but with no usable text. Carries the reason why."""
+
+
+def gemini_text(out: dict) -> str:
+    """The visible text from a Gemini reply, or raise saying what went wrong.
+
+    Newer Gemini models think before answering, and those thoughts come back as
+    parts too. Reading parts[0]["text"] therefore returns a thought instead of
+    the answer -- or raises KeyError when the whole budget went on thinking and
+    `content` came back as an empty object.
+
+    That is exactly what was happening to every image upload. The reply looked
+    like this:
+
+        {"content": {}, "finishReason": "MAX_TOKENS", "thoughtsTokenCount": 60}
+
+    the KeyError was swallowed, and the file was reported as unreadable -- as
+    though the model had looked and found nothing, rather than never having
+    answered at all.
+
+    So: skip thought parts, join the rest, and when there is nothing, say which
+    of the several very different failures it was.
+    """
+    cand = (out.get("candidates") or [{}])[0]
+    parts = ((cand.get("content") or {}).get("parts")) or []
+    text = "".join(p.get("text", "") for p in parts if not p.get("thought"))
+    if text.strip():
+        return text.strip()
+
+    reason = cand.get("finishReason") or "unknown"
+    thoughts = (out.get("usageMetadata") or {}).get("thoughtsTokenCount", 0)
+    if reason == "MAX_TOKENS":
+        raise GeminiEmpty(
+            f"the model spent its entire output budget thinking ({thoughts} "
+            f"tokens) and never wrote an answer")
+    if reason == "SAFETY":
+        raise GeminiEmpty("the model declined to answer for this content")
+    raise GeminiEmpty(f"the reply contained no text (finishReason: {reason})")
+
+
+def no_thinking(config: dict) -> dict:
+    """Turn thinking off for a task that does not need it.
+
+    Reading text out of a picture or filling in a JSON shape is transcription,
+    not reasoning; thinking there buys nothing and can consume the entire
+    output budget before a single visible word is produced.
+    """
+    out = dict(config)
+    out["thinkingConfig"] = {"thinkingBudget": 0}
+    return out

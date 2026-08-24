@@ -15,6 +15,7 @@ One file, stdlib only, no ORM. The schema is small on purpose:
 from __future__ import annotations
 
 import json
+import pathlib
 import sqlite3
 import uuid
 from datetime import datetime, timedelta
@@ -436,6 +437,23 @@ def docs_dir() -> Path:
 def add_document(subject: str, name: str, mime: str, blob: bytes,
                  text: str = "", source: str = "upload") -> dict:
     init()
+    # Re-uploading a file replaces it rather than sitting beside itself. Without
+    # this the same document accumulates a row per upload -- and the cloud merge
+    # adds one more each time it runs, so a list quietly fills with copies of
+    # things the student only ever added once. Matched on subject, name and
+    # size, which is enough to mean "this same file again" without treating a
+    # genuinely edited worksheet as a duplicate.
+    if name:
+        with connect() as c:
+            for old_row in c.execute(
+                    "SELECT id, path FROM documents WHERE name=? AND subject=? "
+                    "AND size=?", (name, subject or "", len(blob))).fetchall():
+                try:
+                    pathlib.Path(dict(old_row)["path"]).unlink(missing_ok=True)
+                except Exception:
+                    pass                    # the row matters more than the file
+                c.execute("DELETE FROM documents WHERE id=?", (dict(old_row)["id"],))
+
     doc_id = rid()
     safe = "".join(ch for ch in name if ch.isalnum() or ch in " ._-")[:80] or "file"
     path = docs_dir() / f"{doc_id}-{safe}"

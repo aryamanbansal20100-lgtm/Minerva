@@ -21,7 +21,7 @@ import io
 import re
 import zipfile
 
-from . import config, pdftext
+from . import config, net, pdftext
 
 # Word/PowerPoint/Excel put visible text in these elements. Paragraph and row
 # ends become newlines so the text keeps its shape instead of running together.
@@ -106,6 +106,10 @@ VISION_PROMPT = (
 )
 
 
+class ImageUnreadable(Exception):
+    """Vision was attempted and failed. Carries why, so the student is told."""
+
+
 def _image(blob: bytes, mime: str) -> str:
     """Read an image with Gemini vision. Returns "" if no key is configured."""
     key = config.env("GEMINI_API_KEY")
@@ -119,16 +123,23 @@ def _image(blob: bytes, mime: str) -> str:
             {"inline_data": {"mime_type": mime,
                              "data": base64.b64encode(blob).decode()}},
         ]}],
-        "generationConfig": {"temperature": 0.0, "maxOutputTokens": 8192},
+        # Thinking off: reading text out of a picture is transcription, not
+        # reasoning, and thinking was consuming the whole budget before a
+        # single visible word came back.
+        "generationConfig": net.no_thinking({"temperature": 0.0,
+                                             "maxOutputTokens": 8192}),
     }
     # Reuse the timetable's Gemini caller: it already handles retired model
     # names, the TLS quirk on this network, and the browser User-Agent.
     from . import timetable
     try:
         out = timetable._call_gemini(payload, key)
-        return out["candidates"][0]["content"]["parts"][0]["text"].strip()
-    except Exception:
-        return ""
+        return net.gemini_text(out)
+    except Exception as exc:
+        # Was: swallow everything and return "". A quota error, a network drop
+        # and a model that answered nothing all became the same silent blank,
+        # which is why images reported "not searchable" with no reason.
+        raise ImageUnreadable(str(exc)) from exc
     return ""
 
 
@@ -158,10 +169,15 @@ def read(name: str, mime: str, blob: bytes) -> tuple[str, str]:
 
         if mime.startswith("image/") or ext in ("png", "jpg", "jpeg", "webp",
                                                 "gif", "heic", "bmp"):
-            got = _image(blob, mime if mime.startswith("image/") else "image/png")
-            if got:
-                return got, "read by AI vision"
-            return "", "no Gemini key set, so images cannot be read"
+            if not config.env("GEMINI_API_KEY"):
+                return "", "no Gemini key set, so images cannot be read"
+            if len(blob) > 8 * 1024 * 1024:
+                return "", "image is over 8 MB — too large for AI vision"
+            try:
+                return _image(blob, mime if mime.startswith("image/")
+                              else "image/png"), "read by AI vision"
+            except ImageUnreadable as exc:
+                return "", f"AI vision could not read it — {exc}"
 
         if mime.startswith("text/") or ext in ("txt", "md", "csv", "json", "rtf"):
             text = blob.decode("utf-8", "replace")[:200000]

@@ -257,7 +257,7 @@ def read_image(data_url: str, subjects: list[str] | None = None) -> dict:
     out = _call_gemini(payload, key)
 
     try:
-        text = out["candidates"][0]["content"]["parts"][0]["text"]
+        text = net.gemini_text(out)
     except (KeyError, IndexError):
         raise TimetableError("Gemini returned nothing readable")
 

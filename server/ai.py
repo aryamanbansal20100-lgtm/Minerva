@@ -60,50 +60,65 @@ USER_AGENT = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
 # — and because every failure fell back silently, the app kept "working" while
 # producing raw transcript lines instead of notes. So: preference lists, probed
 # once against the live catalogue, and a loud error if nothing answers.
+# No dead names here. A fallback that 404s is worse than no fallback: it is the
+# one that gets reached exactly when everything else has already failed, so it
+# turns a recoverable moment into an error in the student's face. Groq removed
+# the llama-3.3 / llama-3.1 names, so they are gone from the lists entirely --
+# and _dead below catches any other name Groq retires while the server is up.
 BIG_CHOICES = ["openai/gpt-oss-120b", "qwen/qwen3.6-27b", "groq/compound",
-               "openai/gpt-oss-20b", "llama-3.3-70b-versatile"]
+               "openai/gpt-oss-20b"]
 SMALL_CHOICES = ["openai/gpt-oss-20b", "qwen/qwen3.6-27b", "groq/compound-mini",
-                 "openai/gpt-oss-120b", "llama-3.1-8b-instant"]
+                 "openai/gpt-oss-120b"]
 
 BIG = BIG_CHOICES[0]
 SMALL = SMALL_CHOICES[0]
 
-_available: set[str] = set()
+# Cached per key, not globally. Keys are per-student now, and a student's own
+# Groq account can expose a different set of models than the server key -- one
+# shared cache handed one account's model list to everyone.
+_catalogues: dict[str, set[str]] = {}
+# Names Groq rejected as nonexistent while this process was running, so a model
+# retired mid-session is never offered again.
+_dead: set[str] = set()
 _last_error = ""
 
 
 def catalogue() -> set:
-    """What this key can actually call, asked once."""
-    global _available
-    if _available:
-        return _available
+    """What THIS key can actually call, asked once per key."""
     key = groq_key()
     if not key:
         return set()
+    cached = _catalogues.get(key)
+    if cached:
+        return cached - _dead
     req = urllib.request.Request(
         "https://api.groq.com/openai/v1/models",
         headers={"Authorization": "Bearer " + key, "User-Agent": USER_AGENT})
     try:
         with net.urlopen(req, timeout=20) as resp:
             data = json.loads(resp.read().decode("utf-8"))
-        _available = {m["id"] for m in data.get("data", [])}
+        got = {m["id"] for m in data.get("data", [])}
+        _catalogues[key] = got
     except Exception:
-        _available = set()
-    return _available
+        got = set()               # a failed fetch is not cached, so it retries
+    return got - _dead
 
 
 def pick(choices: list) -> str:
-    have = catalogue()
+    """A live model name. Never one Groq has told us is dead."""
+    have = catalogue()                       # already excludes _dead
+    live = [c for c in choices if c not in _dead]
     if not have:
-        return choices[0]
-    for name in choices:
+        # Could not ask (no key, network down): trust the preference order, but
+        # still skip anything already known dead this session.
+        return live[0] if live else choices[0]
+    for name in choices:                     # a preferred model that exists
         if name in have:
             return name
-    # Nothing preferred survived; take any chat-capable model rather than 404.
-    for name in sorted(have):
+    for name in sorted(have):                # any other chat-capable model
         if not any(x in name for x in ("whisper", "guard", "orpheus", "tts")):
             return name
-    return choices[0]
+    return live[0] if live else choices[0]
 
 
 def big() -> str:
@@ -163,8 +178,14 @@ def _openai_chat(url: str, key: str, model: str, system: str, user: str,
             out = json.loads(resp.read().decode("utf-8"))
         return out["choices"][0]["message"]["content"].strip()
     except urllib.error.HTTPError as exc:
-        body = exc.read()[:200].decode("utf-8", "replace")
-        raise AIUnavailable(f"HTTP {exc.code} {body}") from exc
+        body = exc.read()[:300].decode("utf-8", "replace")
+        err = AIUnavailable(f"HTTP {exc.code} {body}")
+        # A retired model comes back as 404 model_not_found. Flag it so chat()
+        # can drop the name and try a live one instead of surfacing the raw
+        # "model does not exist" to the student.
+        err.dead_model = (exc.code == 404 and (
+            "model_not_found" in body or "does not exist" in body))
+        raise err from exc
     except (urllib.error.URLError, OSError, KeyError, ValueError) as exc:
         raise AIUnavailable(f"{type(exc).__name__}: {exc}") from exc
 
@@ -193,13 +214,25 @@ def chat(system: str, user: str, model: str = "", temperature: float = 0.4,
 
     problems = []
     for url, k, name, who in attempts:
-        try:
-            text = _openai_chat(url, k, name, system, user, temperature,
-                                max_tokens, want_json)
-            _last_error = ""
-            return text
-        except AIUnavailable as exc:
-            problems.append(f"{who}: {exc}")
+        for retry in range(3):        # a couple of self-heals, then give up
+            try:
+                text = _openai_chat(url, k, name, system, user, temperature,
+                                    max_tokens, want_json)
+                _last_error = ""
+                return text
+            except AIUnavailable as exc:
+                # Groq retired this model mid-session: remember it as dead, pick
+                # a fresh one, and try again on the same provider. This is the
+                # exact "llama-3.3-70b-versatile does not exist" the student saw.
+                if who == "groq" and getattr(exc, "dead_model", False):
+                    _dead.add(name)
+                    _catalogues.pop(k, None)
+                    nxt = big() if max_tokens >= 800 else small()
+                    if nxt != name and nxt not in _dead:
+                        name = nxt
+                        continue
+                problems.append(f"{who}: {exc}")
+                break
     _last_error = " | ".join(problems)[:300]
     raise AIUnavailable(_last_error)
 

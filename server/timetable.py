@@ -251,13 +251,17 @@ def read_image(data_url: str, subjects: list[str] | None = None) -> dict:
             {"text": prompt},
             {"inline_data": {"mime_type": mime, "data": b64}},
         ]}],
-        "generationConfig": {"temperature": 0.1, "maxOutputTokens": 32768,
-                             "responseMimeType": "application/json"},
+        "generationConfig": net.no_thinking({
+            "temperature": 0.1, "maxOutputTokens": 32768,
+            "responseMimeType": "application/json"}),
     }
     out = _call_gemini(payload, key)
 
     try:
         text = net.gemini_text(out)
+    except net.GeminiEmpty as exc:
+        raise TimetableError(f"Google read the image but returned no text — "
+                             f"{exc}. Try a clearer, straight-on photo.") from exc
     except (KeyError, IndexError):
         raise TimetableError("Gemini returned nothing readable")
 

@@ -86,6 +86,9 @@ export interface DiagramSpec {
   lines?: DiagramLine[];
   x?: string;
   y?: string;
+  /* "centre" puts 0,0 in the middle and accepts -100..100, which any curve
+     with negative values needs. Absent means the first quadrant only. */
+  origin?: string;
 }
 
 export interface Definition {
@@ -982,17 +985,36 @@ const graph: Draw = (spec) => {
   const R = 18;
   const T = 16;
   const B = 40;
-  const px = (v: number) => L + (Math.max(0, Math.min(100, Number(v) || 0)) / 100) * (W - L - R);
-  const py = (v: number) =>
-    H - B - (Math.max(0, Math.min(100, Number(v) || 0)) / 100) * (H - T - B);
+
+  /* Two coordinate modes, because one quadrant is not enough.
+
+     The original clamped every point to 0-100 with the origin in the bottom
+     left corner. That suits a supply curve and makes a maths lesson
+     impossible: y = x cubed needs negative y, 1/x lives in two opposite
+     quadrants, and reflecting a graph in the x-axis -- the single most common
+     thing a transformations lesson does -- has nowhere to go. Points were
+     silently clamped to zero, so those curves came out flat along the axis.
+
+     centre mode maps -100..100 both ways with the origin in the middle and
+     draws both axes through it. The model asks for it with
+     "origin":"centre". */
+  const centred = spec.origin === "centre";
+  const lo = centred ? -100 : 0;
+  const span = centred ? 200 : 100;
+  const clamp = (v: number) => Math.max(lo, Math.min(100, Number(v) || 0));
+  const px = (v: number) => L + ((clamp(v) - lo) / span) * (W - L - R);
+  const py = (v: number) => H - B - ((clamp(v) - lo) / span) * (H - T - B);
+  // Where the axes cross: the corner normally, the middle when centred.
+  const ax = centred ? px(0) : L;
+  const ay = centred ? py(0) : H - B;
 
   return {
     w: W,
     h: H,
     body: (
       <>
-        <line x1={L} y1={T} x2={L} y2={H - B} stroke={DIM} strokeWidth={1.25} />
-        <line x1={L} y1={H - B} x2={W - R} y2={H - B} stroke={DIM} strokeWidth={1.25} />
+        <line x1={ax} y1={T} x2={ax} y2={H - B} stroke={DIM} strokeWidth={1.25} />
+        <line x1={L} y1={ay} x2={W - R} y2={ay} stroke={DIM} strokeWidth={1.25} />
         <text
           x={14}
           y={(T + H - B) / 2}
@@ -1015,7 +1037,13 @@ const graph: Draw = (spec) => {
           {spec.x || "Quantity"}
         </text>
         {/* "passes through the origin" is often the whole point. */}
-        <text x={L - 8} y={H - B + 12} fill={DIM} fontSize={10.5} textAnchor="middle">
+        <text
+          x={ax - 8}
+          y={ay + 12}
+          fill={DIM}
+          fontSize={10.5}
+          textAnchor="middle"
+        >
           0
         </text>
         {lines.map((line, i) => {

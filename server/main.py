@@ -1437,7 +1437,12 @@ class Handler(SimpleHTTPRequestHandler):
             return self._json({"error": "note vanished"}, 404)
 
         rows = store.chunks(rec["id"])
-        transcript = "\n\n".join(r["text"] for r in rows if r["text"].strip())
+        # Strip Whisper's repetition loops before anything reads this. Left in,
+        # they were most of what reached the note writer -- one real lesson came
+        # back 87% "Sikar." and "Dilation." -- which pushed the real teaching out
+        # of the context window and made a full class produce a thin note.
+        transcript = transcribe.collapse_loops(
+            "\n\n".join(r["text"] for r in rows if r["text"].strip()))
         pieces = [r["condensed"] for r in rows]
         seconds = int(payload.get("seconds") or 0)
         store.finish_recording(rec["id"], seconds, len(transcript.split()))

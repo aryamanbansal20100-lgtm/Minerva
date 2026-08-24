@@ -394,9 +394,11 @@ ran out of time, or left a worked example incomplete. Set it false when the
 topic was properly wrapped up. A school period ends on a bell, not on a
 conclusion, so true is common.
 
-"diagram" is REQUIRED as a top-level key. Give the single diagram that best
-shows the shape of this lesson. Only use null if the lesson genuinely has no
-process, comparison, hierarchy, cycle or sequence in it at all — that is rare.
+"diagram" is REQUIRED as a top-level key: the ONE diagram that best summarises
+the whole lesson, used as its header image. It does not limit the diagrams
+inside "blocks" — put as many there as the lesson needs. Only use null if the
+lesson has no shape, process, comparison, hierarchy, cycle or sequence in it at
+all, which is rare.
 TODAY IS {today}; every date in "tasks" must be YYYY-MM-DD and in the future.
 
 Each block is one of:
@@ -416,6 +418,7 @@ Diagram spec — pick the shape that fits what was actually taught:
   {{"kind":"compare","title":str,"columns":[str,str],"rows":[{{"aspect":str,"left":str,"right":str}}]}}
   {{"kind":"hierarchy","title":str,"root":str,"children":[{{"label":str,"children":[str]}}]}}
   {{"kind":"graph","title":str,"x":str,"y":str,"note":str,
+   "origin":"corner"|"centre",
    "lines":[{{"label":str,"dashed":bool,"points":[[x,y],[x,y]]}}]}}
 
 USE "graph" WHENEVER THE LESSON IS ABOUT THE SHAPE OF A CURVE OR A
@@ -427,9 +430,28 @@ horizontal line is [[0,50],[100,50]]. A line through the origin is
 [[0,0],[100,100]]. A line cutting the y-axis is [[0,30],[100,100]]; a line
 cutting the x-axis is [[30,0],[100,90]]. Name both axes.
 
+"origin" decides the coordinate space, and getting it wrong is what makes a
+maths graph come out flat:
+  "corner" (the default) is the first quadrant only. Points run 0..100 with the
+  origin bottom-left. Right for supply, demand, cost, anything non-negative.
+  "centre" puts the origin in the MIDDLE and accepts -100..100 on both axes.
+  Use it whenever any part of the curve goes negative — which is almost every
+  maths graph. y=x³, 1/x, a reflection in the x-axis and a negative
+  coefficient all need it.
+
+Plot a curve as MANY points, not two; two points can only ever be a straight
+line. Roughly eight to fifteen along the curve is enough to read as smooth.
+With "origin":"centre":
+  y=x²      [[-60,90],[-40,40],[-20,10],[0,0],[20,10],[40,40],[60,90]]
+  y=x³      [[-60,-90],[-40,-30],[-20,-4],[0,0],[20,4],[40,30],[60,90]]
+  y=√x      [[0,0],[10,30],[25,48],[45,64],[70,80],[100,95]]
+  y=1/x     two separate lines, one per branch: [[8,95],[15,55],[30,28],[60,14],[95,9]]
+            and [[-8,-95],[-15,-55],[-30,-28],[-60,-14],[-95,-9]]
+  modulus   [[-70,70],[0,0],[70,70]]
+
 A lesson that defines several distinct cases needs ONE GRAPH PER CASE, not one
-overall — five categories of elasticity means five graphs, each placed in the
-section that explains it.
+overall — five categories of elasticity means five graphs, and six standard
+curves means six, each placed in the section that explains it.
 
 Rules that matter:
 - COMPLETENESS IS THE POINT. A student must be able to revise from this note
@@ -446,8 +468,17 @@ Rules that matter:
 - No filler, no "in conclusion", no restating the topic in the first line. Dense
   is not the same as short.
 - Keep every number, formula, date and name exactly as recorded.
-- Include ONE or TWO diagrams, and only where a diagram genuinely helps —
-  a process, a comparison, a hierarchy, a cycle. Never diagram a list.
+- DIAGRAM AS MANY TIMES AS THE LESSON DREW. A teacher who sketched twelve
+  graphs on the board taught twelve things that are shapes, and a note with one
+  of them has lost the lesson. There is no cap. The only rule is that each
+  diagram carries something words alone do not: the shape of a curve, a
+  process, a comparison, a hierarchy, a cycle. Never diagram a list.
+- For maths, the graphs ARE the content, not an illustration of it. Every
+  standard curve named (y=x², x³, √x, 1/x, 1/x², modulus) and every
+  transformation demonstrated (each translation, reflection, stretch) is its
+  own graph block, placed in the section that explains it. Before and after a
+  transformation belong on the SAME graph as two labelled lines, one dashed for
+  the original, so the change is visible rather than described.
 - "gaps" is what to ask the TEACHER next lesson — real questions about the
   subject, the kind a good student writes in the margin. For example: "does
   this formula still hold when the collision is inelastic?", "which of these

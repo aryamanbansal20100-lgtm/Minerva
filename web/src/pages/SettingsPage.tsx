@@ -26,6 +26,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { StatRow, type Stat } from "@/components/StatRow";
 import { apiGet, apiPost } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import { SCHOOL_EMAIL_ENABLED } from "@/lib/firebase";
 import { cn } from "@/lib/utils";
 
 /* -------------------------------------------------------------------------
@@ -912,6 +913,7 @@ export function SettingsPage({ state, refresh }: SettingsPageProps) {
         </Card>
 
         {/* -------------------------------------------------- school email */}
+        {SCHOOL_EMAIL_ENABLED ? (
         <Card label="School email">
           <div className="flex items-center gap-2">
             <Dot tone={mailState.tone} />
@@ -959,6 +961,7 @@ export function SettingsPage({ state, refresh }: SettingsPageProps) {
             ) : null}
           </div>
         </Card>
+        ) : null}
 
         {/* ----------------------------------------------------- managebac */}
         <Card

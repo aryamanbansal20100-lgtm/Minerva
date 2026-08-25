@@ -47,6 +47,23 @@ googleProvider.setCustomParameters({ prompt: "select_account" });
    in auth.tsx for why the two must never be merged. */
 export const MAIL_SCOPE = "https://www.googleapis.com/auth/gmail.readonly";
 
+/* Whether to offer "Connect school email" anywhere in the UI.
+ *
+ * OFF on purpose. gmail.readonly is a Google RESTRICTED scope, and an
+ * unverified app that asks for it makes Google show a full-page red "Google
+ * hasn't verified this app — it isn't safe" warning. On a tool students are
+ * deciding whether to trust, that screen loses them. Removing the warning is
+ * not a code change we can make: it goes away only after Google's restricted-
+ * scope verification (a paid third-party CASA security assessment, months of
+ * process) — not worth it for a free project, and pointless while the school
+ * work students actually need already comes through ManageBac with no warning.
+ *
+ * So the whole email path is switched off here, which is what stops the scope
+ * from ever being requested. Sign-in itself only ever asks for name and email,
+ * which Google does not warn about. Flip this to true only if the OAuth app is
+ * ever verified for the restricted scope. */
+export const SCHOOL_EMAIL_ENABLED = false;
+
 /* The mail token, stored WITH its expiry.
 
    It used to live in sessionStorage, which dies the instant the tab closes — so

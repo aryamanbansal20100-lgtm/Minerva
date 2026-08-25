@@ -25,6 +25,7 @@
    ========================================================================== */
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { SCHOOL_EMAIL_ENABLED } from "@/lib/firebase"
 import type { ReactNode } from "react";
 import { apiGet } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
@@ -471,6 +472,7 @@ export default function NotificationsPage({
           </SourceSection>
 
           {/* ====================================================== Email */}
+          {SCHOOL_EMAIL_ENABLED ? (
           <SourceSection
             source="email"
             total={totals.email}
@@ -557,13 +559,11 @@ export default function NotificationsPage({
                   </p>
                 )}
           </SourceSection>
+          ) : null}
 
           {totals.all === 0 && !error && (
             <p className="text-[13px] text-muted-foreground">
               Nothing waiting.
-              {data.email.connected
-                ? ""
-                : " Connect your school email to see mail here too."}
             </p>
           )}
         </div>

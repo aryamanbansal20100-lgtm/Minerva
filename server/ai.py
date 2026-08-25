@@ -453,6 +453,11 @@ Diagram spec — pick the shape that fits what was actually taught:
   {{"kind":"graph","title":str,"x":str,"y":str,"note":str,
    "origin":"corner"|"centre",
    "lines":[{{"label":str,"dashed":bool,"points":[[x,y],[x,y]]}}]}}
+  {{"kind":"figure","title":str,
+   "arrows":[{{"x1":num,"y1":num,"x2":num,"y2":num,"label":str,"dashed":bool}}],
+   "segments":[{{"x1":num,"y1":num,"x2":num,"y2":num,"label":str}}],
+   "dots":[{{"x":num,"y":num,"label":str}}],
+   "circles":[{{"cx":num,"cy":num,"r":num,"label":str}}]}}
 
 USE "graph" WHENEVER THE LESSON IS ABOUT THE SHAPE OF A CURVE OR A
 RELATIONSHIP — supply and demand, elasticity, cost curves, velocity-time,
@@ -471,6 +476,28 @@ maths graph come out flat:
   Use it whenever any part of the curve goes negative — which is almost every
   maths graph. y=x³, 1/x, a reflection in the x-axis and a negative
   coefficient all need it.
+
+USE "figure" FOR A DRAWING THAT IS NOT A GRAPH: a physics free-body or vector
+diagram, or a maths geometry figure. Everything is on a 0-100 plane with x
+rightwards and y UPWARDS (so y=100 is the top, y=0 the bottom) -- the way it is
+drawn on paper, not flipped.
+  "arrows" are vectors and forces, drawn with a head at (x2,y2). "segments" are
+  plain lines with no head -- the sides of a triangle, the ground, an axis.
+  "dots" are labelled points -- a mass, a vertex A/B/C. "circles" are loops --
+  a ball's circular path, a wheel.
+  Free-body diagram of a 5 kg box on a slope pulled by a rope:
+    "dots":[{{"x":50,"y":50,"label":"5 kg"}}],
+    "arrows":[{{"x1":50,"y1":50,"x2":50,"y2":18,"label":"mg"}},
+              {{"x1":50,"y1":50,"x2":74,"y2":74,"label":"T"}},
+              {{"x1":50,"y1":50,"x2":30,"y2":66,"label":"N"}}]
+  Ball in a vertical circle, forces at the top:
+    "circles":[{{"cx":50,"cy":50,"r":34}}],
+    "dots":[{{"x":50,"y":84,"label":"m"}}],
+    "arrows":[{{"x1":50,"y1":84,"x2":50,"y2":60,"label":"T + mg"}}]
+  A labelled triangle (maths): three "dots" for the vertices and three
+  "segments" joining them, each segment carrying its side label.
+DRAW THE FORCES THE TEACHER DREW. A free-body diagram is the single most common
+thing a mechanics lesson puts on the board, and it is a figure, never a graph.
 
 Plot a curve as MANY points, not two; two points can only ever be a straight
 line. Roughly eight to fifteen along the curve is enough to read as smooth.
@@ -540,13 +567,14 @@ Rules that matter:
 
 
 DIAGRAM_KINDS = ("flow", "cycle", "mindmap", "hierarchy", "timeline",
-                 "compare", "graph")
+                 "compare", "graph", "figure")
 
 # Every field any diagram shape uses, for pulling a spec off a flat block.
 DIAGRAM_FIELDS = ("kind", "title", "nodes", "edges", "steps", "items",
                   "rows", "columns", "branches", "centre", "center",
                   "points", "children", "root", "lines", "x", "y",
-                  "note", "left", "right", "labels")  # left/right: compare
+                  "note", "left", "right", "labels",   # left/right: compare
+                  "arrows", "segments", "dots", "circles")  # figure
 
 
 # Models reach for Mermaid whatever the schema says — it is what they have seen
@@ -639,7 +667,9 @@ def normalise_blocks(blocks) -> list:
             # Mermaid arrives as text under content/mermaid/code/text.
             _nested_root = isinstance(spec.get("root"), dict) and                 spec["root"].get("children")
             _two_col = spec.get("left") or spec.get("right")
-            if not (_nested_root or _two_col or any(spec.get(k) for k in (
+            _figure = any(spec.get(k) for k in
+                          ("arrows", "segments", "dots", "circles"))
+            if not (_nested_root or _two_col or _figure or any(spec.get(k) for k in (
                     "nodes", "rows", "branches", "points", "children",
                     "lines", "steps", "items"))):
                 for key in ("content", "mermaid", "code", "text", "diagram",
@@ -653,7 +683,8 @@ def normalise_blocks(blocks) -> list:
             payload = ("nodes", "steps", "items", "rows", "branches", "points",
                        "children", "lines")
             _keep = isinstance(spec, dict) and (
-                any(spec.get(k) for k in payload) or _two_col or _nested_root)
+                any(spec.get(k) for k in payload) or _two_col or _nested_root
+                or _figure)
             if _keep:
                 if not spec.get("kind") and b.get("kind") not in (None, "diagram"):
                     spec["kind"] = str(b.get("kind"))
@@ -661,6 +692,7 @@ def normalise_blocks(blocks) -> list:
                     # Guess from the shape of the data rather than defaulting
                     # everything to "flow", which drew nonsense for a graph.
                     spec["kind"] = ("graph" if spec.get("lines") else
+                                    "figure" if _figure else
                                     "compare" if spec.get("rows") or _two_col else
                                     "mindmap" if spec.get("branches") else
                                     "timeline" if spec.get("points") else

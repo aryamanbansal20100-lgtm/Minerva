@@ -66,6 +66,29 @@ export interface DiagramLine {
   points?: DiagramPointPair[];
 }
 
+/** A straight element on a "figure": a force/vector arrow or a plain segment.
+    Coordinates are 0-100 with the origin bottom-left and y pointing UP, the
+    way a diagram is drawn on paper. */
+export interface FigureSeg {
+  x1?: number;
+  y1?: number;
+  x2?: number;
+  y2?: number;
+  label?: string;
+  dashed?: boolean;
+}
+export interface FigureDot {
+  x?: number;
+  y?: number;
+  label?: string;
+}
+export interface FigureCircle {
+  cx?: number;
+  cy?: number;
+  r?: number;
+  label?: string;
+}
+
 /** The small JSON the model returns for a drawing. Every field is optional:
     the kind decides which ones are read, and a spec that cannot be drawn is
     skipped rather than shown broken. */
@@ -89,6 +112,12 @@ export interface DiagramSpec {
   /* "centre" puts 0,0 in the middle and accepts -100..100, which any curve
      with negative values needs. Absent means the first quadrant only. */
   origin?: string;
+  /* "figure": free-body diagrams, vectors, geometry, circular motion — the
+     shapes that are neither a graph nor a flow. */
+  arrows?: FigureSeg[];
+  segments?: FigureSeg[];
+  dots?: FigureDot[];
+  circles?: FigureCircle[];
 }
 
 export interface Definition {
@@ -1189,6 +1218,155 @@ const graph: Draw = (spec) => {
   };
 };
 
+/* ---- figure: free-body diagrams, vectors, geometry, circular motion ------
+
+   The shapes a teacher draws that are none of the six above: a mass with force
+   arrows out of it, a triangle with labelled sides, a vector sum, a ball on a
+   circle. One flexible primitive covers them all -- arrows (with heads),
+   segments (without), dots and circles, all on a 0-100 plane with the origin
+   bottom-left and y pointing UP, so the model specifies coordinates the way it
+   would sketch them rather than in flipped pixels. */
+const figure: Draw = (spec, marker) => {
+  const num = (v: unknown, d = 0) => (typeof v === "number" && isFinite(v) ? v : d);
+  const arrows = (spec.arrows || []).slice(0, 12);
+  const segments = (spec.segments || []).slice(0, 14);
+  const dots = (spec.dots || []).slice(0, 12);
+  const circles = (spec.circles || []).slice(0, 6);
+  if (!arrows.length && !segments.length && !dots.length && !circles.length)
+    return null;
+
+  const W = 380;
+  const H = 300;
+  const PAD = 34;
+  // 0..100 in, y flipped so 100 is the top of the drawing.
+  const px = (x: number) => PAD + (num(x) / 100) * (W - 2 * PAD);
+  const py = (y: number) => H - PAD - (num(y) / 100) * (H - 2 * PAD);
+  // A label sitting a little beyond the tip of an arrow, pushed outward along
+  // the arrow's own direction so it never lands on the line.
+  const beyond = (x1: number, y1: number, x2: number, y2: number) => {
+    const dx = x2 - x1;
+    const dy = y2 - y1;
+    const len = Math.hypot(dx, dy) || 1;
+    return { x: x2 + (dx / len) * 15, y: y2 + (dy / len) * 12 };
+  };
+
+  return {
+    w: W,
+    h: H,
+    body: (
+      <>
+        {circles.map((c, i) => (
+          <g key={`c${i}`}>
+            <circle
+              cx={px(num(c.cx, 50))}
+              cy={py(num(c.cy, 50))}
+              r={(num(c.r, 20) / 100) * (W - 2 * PAD)}
+              fill="none"
+              stroke={DIM}
+              strokeWidth={1.6}
+            />
+            {c.label ? (
+              <text
+                x={px(num(c.cx, 50))}
+                y={py(num(c.cy, 50)) - (num(c.r, 20) / 100) * (W - 2 * PAD) - 6}
+                textAnchor="middle"
+                fontSize={11.5}
+                fill={DIM}
+              >
+                {wrap(asText(c.label), 24, 1)[0]}
+              </text>
+            ) : null}
+          </g>
+        ))}
+
+        {segments.map((s, i) => {
+          const x1 = px(num(s.x1));
+          const y1 = py(num(s.y1));
+          const x2 = px(num(s.x2, 100));
+          const y2 = py(num(s.y2));
+          return (
+            <g key={`s${i}`}>
+              <line
+                x1={x1}
+                y1={y1}
+                x2={x2}
+                y2={y2}
+                stroke={INK}
+                strokeWidth={1.8}
+                strokeDasharray={s.dashed ? "5 4" : undefined}
+              />
+              {s.label ? (
+                <text
+                  x={(x1 + x2) / 2}
+                  y={(y1 + y2) / 2 - 6}
+                  textAnchor="middle"
+                  fontSize={11.5}
+                  fill={DIM}
+                >
+                  {wrap(asText(s.label), 22, 1)[0]}
+                </text>
+              ) : null}
+            </g>
+          );
+        })}
+
+        {arrows.map((a, i) => {
+          const x1 = px(num(a.x1, 50));
+          const y1 = py(num(a.y1, 50));
+          const x2 = px(num(a.x2, 50));
+          const y2 = py(num(a.y2, 80));
+          const colour = SERIES[i % SERIES.length];
+          const lab = a.label ? beyond(x1, y1, x2, y2) : null;
+          return (
+            <g key={`a${i}`}>
+              <line
+                x1={x1}
+                y1={y1}
+                x2={x2}
+                y2={y2}
+                stroke={colour}
+                strokeWidth={2.4}
+                strokeDasharray={a.dashed ? "5 4" : undefined}
+                markerEnd={`url(#${marker})`}
+              />
+              {lab ? (
+                <text
+                  x={lab.x}
+                  y={lab.y}
+                  textAnchor="middle"
+                  dominantBaseline="middle"
+                  fontSize={12}
+                  fontWeight={600}
+                  fill={colour}
+                >
+                  {wrap(asText(a.label), 18, 1)[0]}
+                </text>
+              ) : null}
+            </g>
+          );
+        })}
+
+        {dots.map((d, i) => (
+          <g key={`d${i}`}>
+            <circle cx={px(num(d.x, 50))} cy={py(num(d.y, 50))} r={4} fill={INK} />
+            {d.label ? (
+              <text
+                x={px(num(d.x, 50)) + 8}
+                y={py(num(d.y, 50)) - 8}
+                fontSize={12}
+                fontWeight={600}
+                fill={INK}
+              >
+                {wrap(asText(d.label), 22, 1)[0]}
+              </text>
+            ) : null}
+          </g>
+        ))}
+      </>
+    ),
+  };
+};
+
 const KINDS: Record<string, Draw> = {
   flow,
   cycle,
@@ -1197,6 +1375,7 @@ const KINDS: Record<string, Draw> = {
   timeline,
   compare,
   graph,
+  figure,
 };
 
 /** One diagram, or nothing at all when the spec cannot be drawn. */

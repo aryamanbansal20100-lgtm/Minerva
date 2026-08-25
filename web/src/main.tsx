@@ -4,6 +4,7 @@ import "./index.css"
 import App from "./App.tsx"
 import { AuthProvider } from "@/lib/auth"
 import { SignInGate } from "@/components/SignInGate"
+import LockGate from "@/components/LockGate"
 import SplashLogo from "@/components/SplashLogo"
 
 // Follow the OS theme, matching the rest of the app.
@@ -18,7 +19,12 @@ createRoot(document.getElementById("root")!).render(
           fetching behind the animation, so the splash costs no time at all. */}
       <SplashLogo />
       <SignInGate>
-        <App />
+        {/* The fingerprint lock sits INSIDE the sign-in gate: it only ever
+            guards an already-signed-in account, and only on devices where the
+            student turned it on. */}
+        <LockGate>
+          <App />
+        </LockGate>
       </SignInGate>
     </AuthProvider>
   </StrictMode>,

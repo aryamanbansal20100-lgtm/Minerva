@@ -27,6 +27,12 @@ import { StatRow, type Stat } from "@/components/StatRow";
 import { apiGet, apiPost } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { SCHOOL_EMAIL_ENABLED } from "@/lib/firebase";
+import {
+  disableLock,
+  enableLock,
+  lockEnabled,
+  lockSupported,
+} from "@/lib/applock";
 import { cn } from "@/lib/utils";
 
 /* -------------------------------------------------------------------------
@@ -321,6 +327,21 @@ export function SettingsPage({ state, refresh }: SettingsPageProps) {
   }, []);
 
   const { user, signOut, mailToken, connectMail, forgetMail } = useAuth();
+
+  /* Fingerprint lock state. `lockCanUse` is null until the async capability
+     check answers, so the card can say "unavailable" rather than flicker. */
+  const [lockOn, setLockOn] = useState(lockEnabled());
+  const [lockCanUse, setLockCanUse] = useState<boolean | null>(null);
+  const [lockBusy, setLockBusy] = useState(false);
+  const [lockMsg, setLockMsg] = useState("");
+  useEffect(() => {
+    let live = true;
+    lockSupported().then((ok) => live && setLockCanUse(ok));
+    setLockOn(lockEnabled());
+    return () => {
+      live = false;
+    };
+  }, []);
 
   const [ownState, setOwnState] = useState<SettingsState | null>(null);
   const [loadError, setLoadError] = useState("");
@@ -666,6 +687,69 @@ export function SettingsPage({ state, refresh }: SettingsPageProps) {
             in the right account here first — nothing is ever deleted by signing
             in somewhere else.
           </Help>
+        </Card>
+
+        {/* ---------------------------------------------------- app lock */}
+        <Card
+          label="Fingerprint lock"
+          aside={lockOn ? "on" : lockCanUse === false ? "unavailable" : "off"}
+        >
+          <Help>
+            Ask for your fingerprint, Face or device PIN every time Minerva opens
+            on this device — a lock over your notes for a shared or unattended
+            laptop. It uses the unlock your device already has; nothing is sent
+            anywhere, and it is separate from your Google sign-in, which still
+            protects the account itself.
+          </Help>
+
+          {lockCanUse === false ? (
+            <p className="mt-2 text-[12.5px] text-muted-foreground">
+              This device has no fingerprint, Face or PIN unlock the browser can
+              use — or the page is not on a secure (https) connection.
+            </p>
+          ) : (
+            <div className="mt-3 flex items-center gap-2">
+              {lockOn ? (
+                <button
+                  type="button"
+                  className={GHOST}
+                  onClick={() => {
+                    disableLock()
+                    setLockOn(false)
+                    setLockMsg("Fingerprint lock turned off.")
+                  }}
+                >
+                  Turn off
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  className={OUTLINE}
+                  disabled={lockBusy || !user}
+                  onClick={async () => {
+                    setLockBusy(true)
+                    setLockMsg("")
+                    try {
+                      await enableLock(
+                        user?.displayName || user?.email || "student",
+                      )
+                      setLockOn(true)
+                      setLockMsg("On. Minerva will ask for your fingerprint next time it opens.")
+                    } catch (e) {
+                      setLockMsg(e instanceof Error ? e.message : String(e))
+                    } finally {
+                      setLockBusy(false)
+                    }
+                  }}
+                >
+                  {lockBusy ? "Waiting for your device…" : "Turn on fingerprint lock"}
+                </button>
+              )}
+            </div>
+          )}
+          {lockMsg ? (
+            <p className="mt-2 text-[12.5px] text-muted-foreground">{lockMsg}</p>
+          ) : null}
         </Card>
 
         {/* ------------------------------------------------------- profile */}

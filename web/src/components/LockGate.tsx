@@ -1,5 +1,10 @@
 import { useCallback, useEffect, useState } from "react"
-import { lockEnabled, lockPassedThisSession, unlock } from "@/lib/applock"
+import {
+  disableLock,
+  lockEnabled,
+  lockPassedThisSession,
+  unlock,
+} from "@/lib/applock"
 import MinervaMark from "@/components/MinervaMark"
 
 /* The lock screen. Sits between sign-in and the app: if this device has the
@@ -71,6 +76,20 @@ export default function LockGate({ children }: { children: React.ReactNode }) {
         </button>
 
         {error && <p className="text-[12.5px] text-late">{error}</p>}
+
+        {/* An escape hatch so a failing sensor can never trap someone out of
+            their own account. The real security is the Google sign-in behind
+            this; turning the device lock off here is safe. */}
+        <button
+          type="button"
+          onClick={() => {
+            disableLock()
+            setLocked(false)
+          }}
+          className="mt-1 text-[12px] text-muted-foreground underline underline-offset-2 hover:text-foreground"
+        >
+          Can't unlock? Turn the lock off
+        </button>
       </div>
     </div>
   )

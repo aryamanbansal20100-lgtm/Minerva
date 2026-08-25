@@ -77,6 +77,27 @@ function markPassed() {
   }
 }
 
+/** Turn a raw WebAuthn error into something a student can act on. The browser
+    throws a generic NotAllowedError for a cancel, a timeout and a denied
+    prompt alike, which is why the raw message reads so alarmingly. */
+function friendlyWebauthnError(e: unknown): Error {
+  const name = e instanceof Error ? e.name : ""
+  if (name === "NotAllowedError" || name === "AbortError") {
+    return new Error(
+      "The fingerprint prompt was cancelled or timed out. Try again, and confirm with your fingerprint, Face or PIN when your device asks.",
+    )
+  }
+  if (name === "InvalidStateError") {
+    return new Error("This device is already set up. The lock is on.")
+  }
+  if (name === "NotSupportedError" || name === "SecurityError") {
+    return new Error(
+      "This device or browser can't use a fingerprint lock here. It needs a device unlock (fingerprint/Face/PIN) and a secure (https) connection.",
+    )
+  }
+  return e instanceof Error ? e : new Error(String(e))
+}
+
 /** Register the device's fingerprint/passkey and turn the lock on.
     Returns true on success; throws with a readable message on failure. */
 export async function enableLock(userLabel: string): Promise<boolean> {
@@ -85,28 +106,33 @@ export async function enableLock(userLabel: string): Promise<boolean> {
       "This device has no fingerprint, Face or PIN unlock available to the browser.",
     )
   }
-  const cred = (await navigator.credentials.create({
-    publicKey: {
-      challenge: randomBytes(32),
-      rp: { name: "Minerva", id: location.hostname },
-      user: {
-        id: randomBytes(16),
-        name: userLabel || "student",
-        displayName: userLabel || "Minerva student",
+  let cred: PublicKeyCredential | null
+  try {
+    cred = (await navigator.credentials.create({
+      publicKey: {
+        challenge: randomBytes(32),
+        rp: { name: "Minerva", id: location.hostname },
+        user: {
+          id: randomBytes(16),
+          name: userLabel || "student",
+          displayName: userLabel || "Minerva student",
+        },
+        // ES256 and RS256 — every platform authenticator supports one of them.
+        pubKeyCredParams: [
+          { type: "public-key", alg: -7 },
+          { type: "public-key", alg: -257 },
+        ],
+        authenticatorSelection: {
+          authenticatorAttachment: "platform",
+          userVerification: "required",
+          residentKey: "preferred",
+        },
+        timeout: 60000,
       },
-      // ES256 and RS256 — every platform authenticator supports one of them.
-      pubKeyCredParams: [
-        { type: "public-key", alg: -7 },
-        { type: "public-key", alg: -257 },
-      ],
-      authenticatorSelection: {
-        authenticatorAttachment: "platform",
-        userVerification: "required",
-        residentKey: "preferred",
-      },
-      timeout: 60000,
-    },
-  })) as PublicKeyCredential | null
+    })) as PublicKeyCredential | null
+  } catch (e) {
+    throw friendlyWebauthnError(e)
+  }
   if (!cred) throw new Error("Setup was cancelled.")
   try {
     localStorage.setItem(CRED_KEY, b64(cred.rawId))
@@ -140,14 +166,19 @@ export async function unlock(): Promise<boolean> {
   })()
   if (!id) return true // lock not really set up; do not trap the user
 
-  const assertion = (await navigator.credentials.get({
-    publicKey: {
-      challenge: randomBytes(32),
-      allowCredentials: [{ type: "public-key", id: unb64(id) }],
-      userVerification: "required",
-      timeout: 60000,
-    },
-  })) as PublicKeyCredential | null
+  let assertion: PublicKeyCredential | null
+  try {
+    assertion = (await navigator.credentials.get({
+      publicKey: {
+        challenge: randomBytes(32),
+        allowCredentials: [{ type: "public-key", id: unb64(id) }],
+        userVerification: "required",
+        timeout: 60000,
+      },
+    })) as PublicKeyCredential | null
+  } catch (e) {
+    throw friendlyWebauthnError(e)
+  }
 
   if (!assertion) throw new Error("Unlock was cancelled.")
   markPassed()

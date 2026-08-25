@@ -138,9 +138,22 @@ def configured() -> bool:
 
 
 def status() -> dict:
-    return {"ok": configured(), "model": big(),
+    """Cheap and non-blocking: this runs on every /api/state.
+
+    It used to call big(), which calls pick(), which fetches the Groq model
+    catalogue over the network (a 20-second-timeout request) the first time per
+    key. On a cold server that made every state fetch hang on a network call and
+    could leave the app reading "not connected to the brain" while it waited.
+    The reported model is now the configured or default name; the real
+    per-request model choice still consults the live catalogue at chat time.
+    """
+    ok = configured()
+    # Use a model the catalogue already confirmed if we have one cached; never
+    # trigger a fetch from here.
+    model = config.env("GROQ_MODEL") or BIG
+    return {"ok": ok, "model": model,
             "last_error": _last_error,
-            "reason": "" if configured() else
+            "reason": "" if ok else
                       "no GROQ_API_KEY in .env — get a free one at console.groq.com/keys"}
 
 

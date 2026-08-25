@@ -16,6 +16,7 @@ import StudyNudge from "@/components/StudyNudge"
 import AskDock from "@/components/AskDock"
 import MinervaMark from "@/components/MinervaMark"
 import Onboarding from "@/components/Onboarding"
+import ErrorBoundary from "@/components/ErrorBoundary"
 
 /* The shell: a fixed sidebar and a scrolling pane, with the student's identity
    at the top — never the app's name. Routing is by hash, so there is no extra
@@ -384,6 +385,10 @@ export default function App() {
           ) : null}
         </div>
 
+        {/* One broken page must not take the nav down with it: this boundary
+            keeps the sidebar and every other screen working, and clears itself
+            when the route changes. */}
+        <ErrorBoundary variant="page" resetKey={route.name + (("id" in route && route.id) || "") + (("subject" in route && route.subject) || "")}>
         {route.name === "notes" && (
           <>
             {/* The quiet helping hand: shows at most one thing worth doing now,
@@ -451,6 +456,7 @@ export default function App() {
           <NotificationsPage onOpenSettings={() => go("#/settings")} />
         )}
         {route.name === "settings" && <SettingsPage state={state as never} refresh={refresh} />}
+        </ErrorBoundary>
       </main>
 
       {/* Ask sits above every screen: a question happens while you are reading

@@ -15,6 +15,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { StatRow, type Stat } from "@/components/StatRow";
+import VideoImport from "@/components/VideoImport";
 import { apiGet, apiPost } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
@@ -435,6 +436,16 @@ export function NotesPage({
       </header>
 
       <StatRow stats={stats} />
+
+      <div className="mt-4">
+        <VideoImport
+          subject={subject}
+          onDone={() => {
+            void load();
+            if (refresh) void Promise.resolve(refresh());
+          }}
+        />
+      </div>
 
       {error ? (
         <p className="mb-5 border-l-2 border-l-late pl-3 text-[13px] text-late">

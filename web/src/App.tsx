@@ -15,6 +15,7 @@ import PracticePage from "@/pages/PracticePage"
 import StudyNudge from "@/components/StudyNudge"
 import AskDock from "@/components/AskDock"
 import MinervaMark from "@/components/MinervaMark"
+import Onboarding from "@/components/Onboarding"
 
 /* The shell: a fixed sidebar and a scrolling pane, with the student's identity
    at the top — never the app's name. Routing is by hash, so there is no extra
@@ -24,7 +25,7 @@ import MinervaMark from "@/components/MinervaMark"
    props and self-loads, so nothing breaks if a page is opened cold. */
 
 type State = {
-  profile?: { subjects?: string[] }
+  profile?: { subjects?: string[]; onboarded?: boolean; name?: string }
   notebooks?: { id: string; title: string; notes: number }[]
   notes?: unknown[]
   tasks?: { done?: boolean; due?: string | null }[]
@@ -180,6 +181,24 @@ export default function App() {
   const id = useMemo(() => identityOf(user), [user])
   const openTop = route.name === "note" || route.name === "book" ? "notes" : route.name
   const openTasks = (state?.tasks || []).filter((t) => !t.done).length
+
+  /* First run: a signed-in account that has never been set up has no subjects
+     to organise anything around. Show the setup form instead of a blank app.
+     Gated on both flags so an existing, configured account is never sent back
+     through it, and only once state has loaded so the shell does not flash. */
+  const needsSetup =
+    !!state &&
+    !state.profile?.onboarded &&
+    !(state.profile?.subjects && state.profile.subjects.length > 0)
+
+  if (needsSetup) {
+    return (
+      <Onboarding
+        initialName={state?.profile?.name || user?.displayName || ""}
+        onDone={refresh}
+      />
+    )
+  }
 
   return (
     <div className="flex h-screen overflow-hidden bg-background text-foreground">

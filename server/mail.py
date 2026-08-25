@@ -139,6 +139,33 @@ ADMIN = re.compile(
     r"\b(newsletter|circular|holiday|timetable|trip|permission slip|fee|"
     r"payment|consent|photo|assembly|notice|bulletin|calendar)\b", re.I)
 
+# Senders that are educational by their address: school domains, and the
+# platforms schools actually use. .edu / .ac / .sch / .edu.<cc> cover most
+# schools and universities worldwide.
+EDU_SENDER = re.compile(
+    r"(@[^@\s]*\.(edu|ac|sch)(\.|)|@[^@\s]*\.edu\.[a-z]{2}|"
+    r"managebac\.com|classroom\.google\.com|@[^@\s]*school[^@\s]*|"
+    r"khanacademy|turnitin|@[^@\s]*\.k12\.)", re.I)
+
+
+def educational(sender: str, subject: str, snippet: str,
+                student_domain: str = "") -> bool:
+    """Is this school/study mail, as opposed to personal or promotional?
+
+    True when the sender is a school or a study platform, when it comes from the
+    student's OWN school domain, or when the words are unmistakably schoolwork
+    (an assignment, a discussion, a test). This is what lets the inbox show
+    "educational" apart from the rest.
+    """
+    s = (sender or "").lower()
+    if EDU_SENDER.search(s):
+        return True
+    if student_domain and student_domain.lower() in s:
+        return True
+    blob = f"{subject} {snippet}"
+    return bool(ASSIGNMENT.search(blob) or DISCUSSION.search(blob))
+
+
 # Mail that is not school business at all.
 NOISE = re.compile(
     r"(noreply@|no-reply@|newsletter@|marketing@|unsubscribe|promotions?@)", re.I)
@@ -157,16 +184,21 @@ def classify(subject: str, sender: str, snippet: str) -> tuple[str, bool]:
     return "other", urgent
 
 
-def fetch(token: str, limit: int = 25, days: int = 14) -> list[dict]:
+def fetch(token: str, limit: int = 25, days: int = 14,
+          important: set[str] | None = None,
+          student_domain: str = "") -> list[dict]:
     """Recent mail, newest first, split into streams.
 
     Read-only. Nothing is marked read, moved, replied to or deleted — the scope
-    granted does not even permit it.
+    granted does not even permit it. `important` is the set of addresses/@domains
+    the student has starred; anything matching is lifted to urgent so it sits at
+    the very top, and every message is tagged educational-or-not.
     """
     if not token:
         raise MailError("no email permission yet — press "
                         "“Connect school email”.")
-    limit = max(1, min(50, int(limit or 25)))
+    important = important or set()
+    limit = max(1, min(150, int(limit or 25)))
     query = f"in:inbox newer_than:{max(1, min(60, int(days or 14)))}d"
     listing = _get("messages", token, q=query, maxResults=limit)
     out = []
@@ -183,16 +215,23 @@ def fetch(token: str, limit: int = 25, days: int = 14) -> list[dict]:
         stream, urgent = classify(subject, sender, snippet)
         body = _body_text(msg.get("payload") or {})
         name = re.sub(r"\s*<[^>]*>", "", sender).strip(' "') or sender
+        address = (re.search(r"<([^>]+)>", sender) or [None, sender])[1]
+        addr_l = (address or "").strip().lower()
+        keys = [addr_l] + (["@" + addr_l.split("@", 1)[1]] if "@" in addr_l else [])
+        starred = any(k in important for k in keys)
         out.append({
             "id": msg.get("id"),
             "source": "email",
             "from": name,
-            "address": (re.search(r"<([^>]+)>", sender) or [None, sender])[1],
+            "address": address,
             "subject": subject,
             "snippet": snippet[:400],
             "body": (body or snippet)[:6000],
             "stream": stream,
-            "urgent": urgent,
+            # A starred sender is always urgent, so it leads the inbox.
+            "urgent": urgent or starred,
+            "important": starred,
+            "educational": educational(sender, subject, snippet, student_domain),
             "at": _header(msg, "Date"),
             "unread": "UNREAD" in (msg.get("labelIds") or []),
             "url": f"https://mail.google.com/mail/u/0/#inbox/{msg.get('id')}",

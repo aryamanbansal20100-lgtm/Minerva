@@ -27,7 +27,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { SCHOOL_EMAIL_ENABLED } from "@/lib/firebase"
 import type { ReactNode } from "react";
-import { apiGet } from "@/lib/api";
+import { apiGet, apiPost } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { StatRow } from "@/components/StatRow";
 import { cn } from "@/lib/utils";
@@ -42,11 +42,14 @@ type NotifItem = {
   id: string;
   source: SourceKey;
   from: string;
+  address?: string;
   subject: string;
   snippet: string;
   stream: string;
   band?: string;
   urgent: boolean;
+  important?: boolean;
+  educational?: boolean;
   at: string | null;
   unread: boolean;
   url: string;
@@ -182,14 +185,17 @@ function Callout({
   );
 }
 
-function NotifRow({ item, urgent, quiet }: {
+function NotifRow({ item, urgent, quiet, onStar }: {
   item: NotifItem;
   urgent: boolean;
   quiet: boolean;
+  onStar?: (address: string, on: boolean) => void;
 }) {
   const title = item.subject || "(no subject)";
   const band = item.band && item.band !== "past" ? item.band : "";
   const stamp = when(item.at);
+  // Only email rows can be starred (they have a sender address).
+  const canStar = item.source === "email" && !!item.address;
 
   return (
     <li
@@ -203,6 +209,26 @@ function NotifRow({ item, urgent, quiet }: {
         className="absolute left-0 top-0 h-full w-[2px]"
         style={{ background: urgent ? "var(--late)" : "transparent" }}
       />
+      {canStar && (
+        <button
+          type="button"
+          aria-label={item.important ? "Unmark important" : "Mark important"}
+          title={
+            item.important
+              ? "Important — and mail from this school domain is lifted too"
+              : "Mark important (also lifts mail from the same school domain)"
+          }
+          onClick={() => onStar?.(item.address as string, !item.important)}
+          className={cn(
+            "mt-0.5 shrink-0 text-[15px] leading-none transition-colors",
+            item.important
+              ? "text-warn"
+              : "text-muted-foreground/40 hover:text-warn",
+          )}
+        >
+          {item.important ? "★" : "☆"}
+        </button>
+      )}
       <span className="min-w-0 flex-1">
         {item.url ? (
           <a
@@ -227,6 +253,10 @@ function NotifRow({ item, urgent, quiet }: {
               {band.replace("_", " ")}
             </Pill>
           )}
+          {item.source === "email" && item.educational && (
+            <Pill tone="ok">educational</Pill>
+          )}
+          {item.important && <Pill tone="late">important</Pill>}
           {item.unread && <Pill tone="new">new</Pill>}
           {stamp && <span className="font-mono tabular-nums">{stamp}</span>}
         </span>
@@ -267,6 +297,31 @@ export default function NotificationsPage({
     } finally {
       setChecking(false);
       setLoaded(true);
+    }
+  }, []);
+
+  /* Star a sender important (and, for a school domain, everyone at it). Update
+     the row at once so the star feels instant, then reload so the whole inbox
+     re-sorts with the newly-important mail lifted to the top. */
+  const starSender = useCallback(async (address: string, on: boolean) => {
+    setData((d) => ({
+      ...d,
+      streams: Object.fromEntries(
+        Object.entries(d.streams).map(([k, items]) => [
+          k,
+          items.map((it) =>
+            it.address && it.address.toLowerCase() === address.toLowerCase()
+              ? { ...it, important: on }
+              : it,
+          ),
+        ]),
+      ) as NotifPayload["streams"],
+    }));
+    try {
+      await apiPost("/api/mail/important", { address, on });
+      await load();
+    } catch {
+      /* the optimistic update stays; a later reload corrects it if it failed */
     }
   }, []);
 
@@ -548,6 +603,7 @@ export default function NotificationsPage({
                           item={item}
                           urgent={block.key === "urgent"}
                           quiet={block.key === "other"}
+                          onStar={starSender}
                         />
                       ))}
                     </ul>

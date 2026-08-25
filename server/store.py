@@ -109,6 +109,10 @@ CREATE TABLE IF NOT EXISTS documents (
     text TEXT DEFAULT '', source TEXT DEFAULT 'upload',
     created_at TEXT NOT NULL);
 
+CREATE TABLE IF NOT EXISTS important_senders (
+    key TEXT PRIMARY KEY,          -- an email address, or a bare @domain
+    added_at TEXT NOT NULL);
+
 CREATE INDEX IF NOT EXISTS idx_docs_subject ON documents(subject, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_notes_book ON notes(notebook_id, updated_at DESC);
 CREATE INDEX IF NOT EXISTS idx_tasks_due ON tasks(done, due);
@@ -466,6 +470,61 @@ def add_document(subject: str, name: str, mime: str, blob: bytes,
         c.execute("INSERT INTO documents VALUES (:id,:subject,:name,:mime,:size,"
                   ":path,:text,:source,:created_at)", row)
     return {k: v for k, v in row.items() if k != "path"}
+
+
+def important_senders() -> set[str]:
+    """The addresses and @domains this student has flagged as important."""
+    init()
+    with connect() as c:
+        return {r["key"] for r in c.execute("SELECT key FROM important_senders")}
+
+
+def _sender_keys(address: str) -> list[str]:
+    """The two keys an address matches on: the address itself, and its @domain.
+    Marking one sender important therefore also lifts anyone else at the same
+    school domain -- which is what "similar emails" means for school mail."""
+    addr = (address or "").strip().lower()
+    if "@" not in addr:
+        return [addr] if addr else []
+    return [addr, "@" + addr.split("@", 1)[1]]
+
+
+# Marking a personal contact important should not flag everyone at gmail.com.
+# Marking a teacher important SHOULD flag the rest of the school. So the domain
+# is lifted only when it is not one of the big consumer mail hosts.
+_CONSUMER = {"gmail.com", "googlemail.com", "outlook.com", "hotmail.com",
+             "yahoo.com", "yahoo.co.in", "icloud.com", "proton.me", "protonmail.com",
+             "live.com", "aol.com", "rediffmail.com"}
+
+
+def mark_sender_important(address: str, on: bool = True) -> None:
+    init()
+    addr = (address or "").strip().lower()
+    if not addr or "@" not in addr:
+        return
+    domain = addr.split("@", 1)[1]
+    with connect() as c:
+        if on:
+            c.execute("INSERT OR REPLACE INTO important_senders (key, added_at) "
+                      "VALUES (?, ?)", (addr, now()))
+            # "similar emails" = the same school domain. Not for consumer hosts,
+            # or one starred friend would flag all of gmail.
+            if domain not in _CONSUMER:
+                c.execute("INSERT OR REPLACE INTO important_senders (key, added_at)"
+                          " VALUES (?, ?)", ("@" + domain, now()))
+        else:
+            c.execute("DELETE FROM important_senders WHERE key=? OR key=?",
+                      (addr, "@" + domain))
+
+
+def is_important(address: str, marked: set[str] | None = None) -> bool:
+    """True if this address, or another address at a domain the student has
+    marked important, is flagged. So marking one teacher important auto-marks
+    later mail from the same school domain."""
+    marked = important_senders() if marked is None else marked
+    if not marked:
+        return False
+    return any(k in marked for k in _sender_keys(address))
 
 
 def documents(subject: str = "") -> list[dict]:

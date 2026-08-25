@@ -742,6 +742,18 @@ class Handler(SimpleHTTPRequestHandler):
             # that actually gets them to the cloud.
             return self._json(sync.push_all())
 
+        if path == "/api/mail/important":
+            # Star or unstar a sender. A starred sender (and, for a school
+            # domain, the rest of that domain) is lifted to the top of the inbox
+            # on every future fetch -- the "mark important" the student asked for.
+            addr = (payload.get("address") or "").strip()
+            on = payload.get("on")
+            on = True if on is None else bool(on)
+            if not addr:
+                return self._json({"error": "no address"}, 400)
+            store.mark_sender_important(addr, on)
+            return self._json({"ok": True, "address": addr, "important": on})
+
         if path == "/api/backup/restore":
             # The other direction: pull down anything this device is missing.
             # Needed because a free host wipes its disk on every redeploy, and
@@ -1134,7 +1146,14 @@ class Handler(SimpleHTTPRequestHandler):
                 who = mail.profile(mail_token)
                 email_state = {"connected": True, "address": who["address"],
                                "error": ""}
-                for m in mail.fetch(mail_token, limit=25, days=int(days or 14)):
+                # The student's own school domain and their starred senders, so
+                # school mail and marked-important mail are both recognised.
+                addr = who.get("address") or ""
+                student_domain = addr.split("@", 1)[1] if "@" in addr else ""
+                important = store.important_senders()
+                for m in mail.fetch(mail_token, limit=120, days=int(days or 14),
+                                    important=important,
+                                    student_domain=student_domain):
                     streams["urgent" if m["urgent"] else m["stream"]].append(m)
             except mail.MailError as exc:
                 email_state = {"connected": False, "address": "",

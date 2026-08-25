@@ -110,7 +110,7 @@ export function Pill({
   tone = "",
   children,
 }: {
-  tone?: BandKey | "new" | "calm";
+  tone?: BandKey | "new" | "calm" | "ok";
   children: ReactNode;
 }) {
   return (
@@ -120,6 +120,7 @@ export function Pill({
         tone === "late" && "border-late/45 text-late",
         tone === "soon" && "border-warn/50 text-warn",
         tone === "new" && "border-info/45 text-info",
+        tone === "ok" && "border-ok/45 text-ok",
         (tone === "" || tone === "calm") && "border-border text-muted-foreground",
       )}
     >

@@ -58,11 +58,12 @@ export const MAIL_SCOPE = "https://www.googleapis.com/auth/gmail.readonly";
  * process) — not worth it for a free project, and pointless while the school
  * work students actually need already comes through ManageBac with no warning.
  *
- * So the whole email path is switched off here, which is what stops the scope
- * from ever being requested. Sign-in itself only ever asks for name and email,
- * which Google does not warn about. Flip this to true only if the OAuth app is
- * ever verified for the restricted scope. */
-export const SCHOOL_EMAIL_ENABLED = false;
+ * The feature stays ON: students want their school mail here. Google's
+ * unverified-app screen is the price of the gmail.readonly scope until the app
+ * is verified, and the honest fix for the scare is to WARN THE USER FIRST (see
+ * the pre-connect note in Settings/Notifications) rather than to drop a feature
+ * they rely on. Set to false only to hard-disable the scope entirely. */
+export const SCHOOL_EMAIL_ENABLED = true;
 
 /* The mail token, stored WITH its expiry.
 

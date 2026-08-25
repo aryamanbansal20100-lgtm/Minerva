@@ -269,27 +269,34 @@ def gemini_json(system: str, user: str, max_tokens: int = 16384) -> dict | None:
         "generationConfig": {"temperature": 0.2, "maxOutputTokens": max_tokens,
                              "responseMimeType": "application/json"},
     }
-    # 503 "high demand" is transient and common on the free tier. One attempt
-    # per model meant a busy minute produced no note at all, and the caller fell
-    # back to dumping raw transcript lines. Try each model more than once, with
-    # a pause, before giving up on it.
+    # This runs INSIDE the student's request while they watch a spinner, so it
+    # must be bounded. The old loop was 4 rounds x 4 models = 16 tries at a
+    # 180-second timeout each -- worst case over half an hour of hanging before
+    # anything fell back. A note that has not come back in ~two minutes is not
+    # coming; give up and let Groq write it.
     import time
 
+    started = time.monotonic()
+    DEADLINE = 120.0        # total seconds Gemini may take before we fall back
+    PER_TRY = 75            # a big note genuinely takes ~40-55s; allow headroom
+
     order = ([_gemini_model] if _gemini_model else []) + GEMINI_MODELS
-    plan = [(m, attempt) for attempt in range(4)
-            for m in dict.fromkeys(x for x in order if x)]
-    for name, attempt in plan:
-        # A busy spike lasts seconds, not milliseconds. Waiting 3s, then 8s,
-        # then 15s costs the student nothing — they are watching a spinner —
-        # and it is the difference between a real note and no note.
-        if attempt:
-            time.sleep([0, 3, 8, 15][min(attempt, 3)])
+    models = list(dict.fromkeys(x for x in order if x))
+    # Two passes at most: the second only rescues a transient 503 or blip.
+    plan = [(m, rnd) for rnd in range(2) for m in models]
+    for name, rnd in plan:
+        if name not in models:
+            continue                          # dropped after a 4xx this call
+        if time.monotonic() - started > DEADLINE:
+            break                             # out of time -> Groq fallback
+        if rnd:
+            time.sleep(3)
         req = urllib.request.Request(
             GEMINI_URL.format(model=name, key=key),
             data=json.dumps(payload).encode("utf-8"), method="POST",
             headers={"Content-Type": "application/json", "User-Agent": USER_AGENT})
         try:
-            with net.urlopen(req, timeout=180) as resp:
+            with net.urlopen(req, timeout=PER_TRY) as resp:
                 out = json.loads(resp.read().decode("utf-8"))
             text = net.gemini_text(out)
             start, end = text.find("{"), text.rfind("}")
@@ -300,11 +307,13 @@ def gemini_json(system: str, user: str, max_tokens: int = 16384) -> dict | None:
             _last_error = (f"gemini {name} {exc.code}: "
                            + exc.read()[:150].decode("utf-8", "replace"))
             if exc.code in (400, 404):
-                order = [m for m in order if m != name]   # dead name, drop it
+                if name in models:
+                    models.remove(name)                   # dead name, drop it
             if exc.code == 429:
                 # Daily quota on this model. Drop it for this call and stop
                 # preferring it, so the remaining models get a turn.
-                order = [m for m in order if m != name]
+                if name in models:
+                    models.remove(name)
                 if _gemini_model == name:
                     _gemini_model = ""
             continue

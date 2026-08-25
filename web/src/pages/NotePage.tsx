@@ -34,6 +34,7 @@ export default function NotePage({ id, onLeave, refresh }: Props) {
   const [error, setError] = useState("")
   const [live, setLive] = useState("")          // the transcript while recording
   const [recording, setRecording] = useState(false)
+  const [shared, setShared] = useState("")
   const fileRef = useRef<HTMLInputElement>(null)
   const saveTimer = useRef<number | undefined>(undefined)
 
@@ -191,6 +192,29 @@ export default function NotePage({ id, onLeave, refresh }: Props) {
           className="btn-brand rounded-lg px-3 py-1.5 text-[13px] font-semibold disabled:opacity-60"
         >
           {writing ? "Writing…" : "Write it up"}
+        </button>
+        <button
+          onClick={async () => {
+            // Share the note as text: the native share sheet on a phone (which
+            // reaches WhatsApp, email, anything), and a clipboard copy on a
+            // desktop that has no share sheet.
+            const heading = note?.title || "Note"
+            const text = `${heading}\n\n${body}`.trim() + "\n\n— shared from Minerva"
+            try {
+              if (navigator.share) {
+                await navigator.share({ title: heading, text })
+                return
+              }
+              await navigator.clipboard.writeText(text)
+              setShared("Copied to clipboard")
+              window.setTimeout(() => setShared(""), 2500)
+            } catch {
+              /* the user dismissed the share sheet — nothing to do */
+            }
+          }}
+          className="rounded-md border px-2.5 py-1.5 text-[13px] text-muted-foreground hover:bg-muted"
+        >
+          {shared || "Share"}
         </button>
         <button
           onClick={del}

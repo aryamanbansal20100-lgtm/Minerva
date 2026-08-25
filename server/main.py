@@ -591,7 +591,8 @@ class Handler(SimpleHTTPRequestHandler):
         if path == "/api/document":
             return self._document(q.get("id", ""))
         if path == "/api/notes":
-            return self._json({"notes": store.notes(q.get("notebook", ""))})
+            return self._json({"notes": store.notes(
+                q.get("notebook", ""), context=q.get("context", ""))})
         if path == "/api/note":
             note = store.get_note(q.get("id", ""))
             return self._json(note or {"error": "no such note"},
@@ -840,7 +841,8 @@ class Handler(SimpleHTTPRequestHandler):
                 title=payload.get("title", "Untitled"),
                 notebook_id=payload.get("notebook_id", ""),
                 subject=payload.get("subject", ""),
-                topic=payload.get("topic", ""))
+                topic=payload.get("topic", ""),
+                context=payload.get("context", "school"))
             sync.push_note(made)
             return self._json(made)
 
@@ -893,7 +895,8 @@ class Handler(SimpleHTTPRequestHandler):
                 note = store.create_note(
                     title=payload.get("title", "") or "Untitled",
                     subject=payload.get("subject", ""),
-                    topic=payload.get("topic", ""))
+                    topic=payload.get("topic", ""),
+                    context=payload.get("context", "school"))
                 note_id = note["id"]
             if not store.get_note(note_id):
                 return self._json({"error": "no such note"}, 404)

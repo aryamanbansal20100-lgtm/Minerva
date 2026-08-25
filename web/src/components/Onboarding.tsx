@@ -40,6 +40,7 @@ export default function Onboarding({
   const [curricula, setCurricula] = useState<string[]>(FALLBACK_CURRICULA)
   const [suggested, setSuggested] = useState<string[]>([])
   const [subjects, setSubjects] = useState<string[]>([])
+  const [tuition, setTuition] = useState<string[]>([])
   const [customSubject, setCustomSubject] = useState("")
   const [key, setKey] = useState("")
   const [saving, setSaving] = useState(false)
@@ -95,6 +96,7 @@ export default function Onboarding({
         name: name.trim(),
         curriculum,
         subjects,
+        tuition_subjects: tuition,
         groq_key: key.trim() || undefined,
         onboarded: true,
       })
@@ -103,7 +105,7 @@ export default function Onboarding({
       setError(e instanceof Error ? e.message : String(e))
       setSaving(false)
     }
-  }, [name, curriculum, subjects, key, onDone])
+  }, [name, curriculum, subjects, tuition, key, onDone])
 
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto bg-background text-foreground">
@@ -252,6 +254,43 @@ export default function Onboarding({
             <div className="text-[12.5px] text-muted-foreground">
               {subjects.length} selected
             </div>
+
+            {subjects.length > 0 && (
+              <div className="mt-1 flex flex-col gap-2 border-t pt-4">
+                <div className="text-[13px] font-medium">
+                  Do you go to tuition for any of these?
+                </div>
+                <div className="text-[12px] text-muted-foreground">
+                  Optional — tap the subjects you have tuition for. Those notes
+                  get their own Tuition tab, kept apart from school.
+                </div>
+                <div className="mt-1 flex flex-wrap gap-2">
+                  {subjects.map((s) => (
+                    <button
+                      key={s}
+                      type="button"
+                      onClick={() =>
+                        setTuition((cur) =>
+                          cur.includes(s)
+                            ? cur.filter((x) => x !== s)
+                            : [...cur, s],
+                        )
+                      }
+                      aria-pressed={tuition.includes(s)}
+                      className={cn(
+                        "rounded-full border px-3 py-1.5 text-[13px] transition-colors",
+                        tuition.includes(s)
+                          ? "border-brand bg-brand-soft font-medium text-brand"
+                          : "hover:bg-muted",
+                      )}
+                    >
+                      {tuition.includes(s) ? "✓ " : "+ "}
+                      {s}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         )}
 

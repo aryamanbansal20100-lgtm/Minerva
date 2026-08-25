@@ -32,9 +32,11 @@ const IDLE: Status = {
 
 export default function VideoImport({
   subject,
+  context = "school",
   onDone,
 }: {
   subject?: string
+  context?: "school" | "tuition"
   onDone?: () => void
 }) {
   const input = useRef<HTMLInputElement>(null)
@@ -46,7 +48,7 @@ export default function VideoImport({
       setStatus({ ...IDLE, running: true, total: files.length })
       const { made, failures } = await videosToNotes(
         files,
-        { subject },
+        { subject, context },
         (fileIndex, total, p) =>
           setStatus((s) => ({
             ...s,

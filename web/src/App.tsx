@@ -26,7 +26,7 @@ import ErrorBoundary from "@/components/ErrorBoundary"
    props and self-loads, so nothing breaks if a page is opened cold. */
 
 type State = {
-  profile?: { subjects?: string[]; onboarded?: boolean; name?: string }
+  profile?: { subjects?: string[]; onboarded?: boolean; name?: string; tuition_subjects?: string[] }
   notebooks?: { id: string; title: string; notes: number }[]
   notes?: unknown[]
   tasks?: { done?: boolean; due?: string | null }[]
@@ -40,6 +40,7 @@ type Route =
   | { name: "assessments" }
   | { name: "practice"; subject?: string }
   | { name: "timetable" }
+  | { name: "tuition" }
   | { name: "calendar" }
   | { name: "due" }
   | { name: "notifications" }
@@ -61,6 +62,8 @@ function parseHash(): Route {
       return { name: "practice", subject: arg || undefined }
     case "timetable":
       return { name: "timetable" }
+    case "tuition":
+      return { name: "tuition" }
     case "calendar":
       return { name: "calendar" }
     case "due":
@@ -91,6 +94,7 @@ function greeting(): string {
 
 const NAV: { label: string; hash: string; match: Route["name"] }[] = [
   { label: "Notes", hash: "#/notes", match: "notes" },
+  { label: "Tuition", hash: "#/tuition", match: "tuition" },
   { label: "Timetable", hash: "#/timetable", match: "timetable" },
   { label: "Calendar", hash: "#/calendar", match: "calendar" },
   { label: "Due", hash: "#/due", match: "due" },
@@ -298,7 +302,12 @@ export default function App() {
         </div>
 
         <nav className="shrink-0 space-y-px p-2">
-          {NAV.map((n) => (
+          {NAV.filter(
+            (n) =>
+              n.match !== "tuition" ||
+              (state?.profile?.tuition_subjects &&
+                state.profile.tuition_subjects.length > 0),
+          ).map((n) => (
             <button
               key={n.hash}
               onClick={() => go(n.hash)}
@@ -408,6 +417,15 @@ export default function App() {
               onOpenNote={(nid) => go("#/note/" + nid)}
             />
           </>
+        )}
+
+        {route.name === "tuition" && (
+          <NotesPage
+            context="tuition"
+            state={state as never}
+            refresh={refresh}
+            onOpenNote={(nid) => go("#/note/" + nid)}
+          />
         )}
 
         {route.name === "assessments" && (

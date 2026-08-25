@@ -48,6 +48,7 @@ export type NoteRow = {
   id: string;
   title?: string | null;
   subject?: string | null;
+  context?: string | null;
   topic?: string | null;
   updated_at?: string | null;
   preview?: string | null;
@@ -90,6 +91,9 @@ export type NotesPageProps = {
   state?: NotesState | null;
   /** Show only this subject. Empty or absent means every note. */
   subject?: string;
+  /** "school" (default) or "tuition" -- which set of notes this page shows and
+      creates. Tuition notes live in their own tab. */
+  context?: "school" | "tuition";
   /** Re-read the shared state after this page writes something. */
   refresh?: () => void | Promise<void>;
   /** Open a note. Falls back to the hash route the old build used. */
@@ -288,6 +292,7 @@ function NoteCard({
 export function NotesPage({
   state,
   subject = "",
+  context = "school",
   refresh,
   onOpenNote,
 }: NotesPageProps) {
@@ -336,9 +341,15 @@ export function NotesPage({
 
   const shown = useMemo(() => {
     const want = subject.trim().toLowerCase();
-    if (!want) return allNotes;
-    return allNotes.filter((n) => (n.subject || "").toLowerCase() === want);
-  }, [allNotes, subject]);
+    // A note with no context predates the column and counts as school.
+    const inContext = (n: NoteRow) =>
+      context === "tuition"
+        ? n.context === "tuition"
+        : n.context !== "tuition";
+    return allNotes.filter(
+      (n) => inContext(n) && (!want || (n.subject || "").toLowerCase() === want),
+    );
+  }, [allNotes, subject, context]);
 
   const open = useMemo(() => tasks.filter(isOpen), [tasks]);
 
@@ -398,6 +409,7 @@ export function NotesPage({
       const note = await apiPost<{ id: string }>("/api/note/new", {
         title: "",
         subject: subject.trim(),
+        context,
       });
       await reload();
       if (note && note.id) openNote(note.id);
@@ -418,7 +430,7 @@ export function NotesPage({
       <header className="mb-5 flex items-start justify-between gap-4">
         <div className="min-w-0">
           <h1 className="text-[19px] font-semibold tracking-tight">
-            {subject || "Notes"}
+            {subject || (context === "tuition" ? "Tuition" : "Notes")}
           </h1>
           <p className="mt-0.5 text-[12.5px] text-muted-foreground">
             {loading && !live ? "Loading…" : plural(shown.length, "note")}
@@ -440,6 +452,7 @@ export function NotesPage({
       <div className="mt-4">
         <VideoImport
           subject={subject}
+          context={context}
           onDone={() => {
             void load();
             if (refresh) void Promise.resolve(refresh());

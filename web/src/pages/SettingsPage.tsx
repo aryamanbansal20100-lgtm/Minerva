@@ -46,6 +46,7 @@ export type Profile = {
   school?: string | null;
   city?: string | null;
   subjects?: string[] | null;
+  tuition_subjects?: string[] | null;
   managebac_ics?: string | null;
   groq_key_set?: boolean | null;
   groq_key_hint?: string | null;
@@ -327,6 +328,30 @@ export function SettingsPage({ state, refresh }: SettingsPageProps) {
   }, []);
 
   const { user, signOut, mailToken, connectMail, forgetMail } = useAuth();
+
+  /* Which subjects the student attends tuition for. Saved on each toggle so the
+     Tuition tab appears (or hides) immediately. */
+  const [tuition, setTuition] = useState<string[]>(
+    () => (state?.profile?.tuition_subjects as string[] | undefined) || [],
+  );
+  useEffect(() => {
+    setTuition((state?.profile?.tuition_subjects as string[] | undefined) || []);
+  }, [state?.profile?.tuition_subjects]);
+  const toggleTuition = useCallback(
+    async (subject: string) => {
+      const next = tuition.includes(subject)
+        ? tuition.filter((s) => s !== subject)
+        : [...tuition, subject];
+      setTuition(next);
+      try {
+        await apiPost("/api/profile", { tuition_subjects: next });
+        if (refresh) await Promise.resolve(refresh());
+      } catch {
+        /* keep the optimistic state; a reload corrects it if it failed */
+      }
+    },
+    [tuition, refresh],
+  );
 
   /* Fingerprint lock state. `lockCanUse` is null until the async capability
      check answers, so the card can say "unavailable" rather than flicker. */
@@ -850,6 +875,40 @@ export function SettingsPage({ state, refresh }: SettingsPageProps) {
             These fill the subject picker on every piece of homework, so a
             wrongly-guessed subject can always be corrected to one of yours.
           </Help>
+        </Card>
+
+        {/* ---------------------------------------------------- tuition */}
+        <Card label="Tuition" aside={tuition.length ? `${tuition.length}` : "off"}>
+          <Help>
+            Tap the subjects you also attend tuition for. Those notes get their
+            own Tuition tab in the sidebar, kept apart from your school notes.
+            Change this whenever your tuition does.
+          </Help>
+          {form.subjects.length ? (
+            <div className="mt-3 flex flex-wrap gap-2">
+              {form.subjects.map((subject) => (
+                <button
+                  key={subject}
+                  type="button"
+                  aria-pressed={tuition.includes(subject)}
+                  onClick={() => void toggleTuition(subject)}
+                  className={cn(
+                    "rounded-full border px-3 py-1.5 text-[12.5px] transition-colors",
+                    tuition.includes(subject)
+                      ? "border-brand bg-brand-soft font-medium text-brand"
+                      : "hover:bg-muted",
+                  )}
+                >
+                  {tuition.includes(subject) ? "✓ " : "+ "}
+                  {subject}
+                </button>
+              ))}
+            </div>
+          ) : (
+            <p className="mt-2 text-[13px] text-muted-foreground">
+              Add your subjects above first, then mark which have tuition.
+            </p>
+          )}
         </Card>
 
         {/* ------------------------------------------------ cloud backup */}

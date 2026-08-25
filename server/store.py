@@ -65,6 +65,7 @@ CREATE TABLE IF NOT EXISTS profile (
     managebac_ics TEXT DEFAULT '', goals TEXT DEFAULT '',
     timetable TEXT DEFAULT '[]',
     groq_key TEXT DEFAULT '',
+    tuition_subjects TEXT DEFAULT '[]',
     onboarded INTEGER DEFAULT 0,
     created_at TEXT, updated_at TEXT);
 
@@ -78,6 +79,7 @@ CREATE TABLE IF NOT EXISTS notes (
     transcript TEXT NOT NULL DEFAULT '', subject TEXT DEFAULT '',
     topic TEXT DEFAULT '', starred INTEGER DEFAULT 0,
     continues INTEGER DEFAULT 0, thread TEXT DEFAULT '',
+    context TEXT DEFAULT 'school',
     created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
 
 CREATE TABLE IF NOT EXISTS recordings (
@@ -158,11 +160,19 @@ def init() -> None:
             # A student's own free Groq key, so their recording runs against
             # their own quota instead of a shared one.
             c.execute("ALTER TABLE profile ADD COLUMN groq_key TEXT DEFAULT ''")
+        if "tuition_subjects" not in pcols:
+            # Subjects the student also attends tuition for -- so tuition notes
+            # can live in their own tab, only for those subjects.
+            c.execute("ALTER TABLE profile ADD COLUMN tuition_subjects TEXT DEFAULT '[]'")
         ncols = {r["name"] for r in c.execute("PRAGMA table_info(notes)")}
         if "continues" not in ncols:
             c.execute("ALTER TABLE notes ADD COLUMN continues INTEGER DEFAULT 0")
         if "thread" not in ncols:
             c.execute("ALTER TABLE notes ADD COLUMN thread TEXT DEFAULT ''")
+        if "context" not in ncols:
+            # A note belongs to school or to tuition, so the two can be kept
+            # in separate tabs. Everything existing is school.
+            c.execute("ALTER TABLE notes ADD COLUMN context TEXT DEFAULT 'school'")
         tcols = {r["name"] for r in c.execute("PRAGMA table_info(tasks)")}
         if "url" not in tcols:
             c.execute("ALTER TABLE tasks ADD COLUMN url TEXT DEFAULT ''")
@@ -188,6 +198,10 @@ def get_profile() -> dict:
         p["timetable"] = json.loads(p.get("timetable") or "[]")
     except ValueError:
         p["timetable"] = []
+    try:
+        p["tuition_subjects"] = json.loads(p.get("tuition_subjects") or "[]")
+    except ValueError:
+        p["tuition_subjects"] = []
     p["onboarded"] = bool(p["onboarded"])
     # The student's own Groq key never leaves this machine. The browser is told
     # only whether one is set and its last four characters, enough to recognise
@@ -216,13 +230,13 @@ def save_profile(patch: dict) -> dict:
     init()
     allowed = ("name", "curriculum", "grade", "school", "city", "country",
                "timezone", "subjects", "managebac_ics", "goals", "onboarded",
-               "timetable", "groq_key")
+               "timetable", "groq_key", "tuition_subjects")
     fields, values = [], []
     for k in allowed:
         if k not in patch:
             continue
         v = patch[k]
-        if k in ("subjects", "timetable"):
+        if k in ("subjects", "timetable", "tuition_subjects"):
             v = json.dumps(v if isinstance(v, list) else [])
         if k == "onboarded":
             v = int(bool(v))
@@ -279,17 +293,28 @@ def ensure_notebook(subject: str) -> str:
 
 
 # ---------------------------------------------------------------- notes
-def notes(notebook_id: str = "", limit: int = 200) -> list[dict]:
+def notes(notebook_id: str = "", limit: int = 200, context: str = "") -> list[dict]:
     init()
-    sql = "SELECT id,notebook_id,title,subject,topic,starred,created_at,updated_at," \
+    sql = "SELECT id,notebook_id,title,subject,topic,starred,context," \
+          "created_at,updated_at," \
           "substr(body,1,240) AS preview, length(body) AS size FROM notes"
-    args: tuple = ()
+    where, args = [], []
     if notebook_id:
-        sql += " WHERE notebook_id=?"
-        args = (notebook_id,)
+        where.append("notebook_id=?")
+        args.append(notebook_id)
+    if context:
+        # An older note has NULL context; treat that as 'school' so the filter
+        # for school notes still finds everything that predates the column.
+        if context == "school":
+            where.append("(context='school' OR context IS NULL)")
+        else:
+            where.append("context=?")
+            args.append(context)
+    if where:
+        sql += " WHERE " + " AND ".join(where)
     sql += " ORDER BY updated_at DESC LIMIT ?"
     with connect() as c:
-        return [dict(r) for r in c.execute(sql, args + (limit,))]
+        return [dict(r) for r in c.execute(sql, tuple(args) + (limit,))]
 
 
 def get_note(note_id: str) -> dict | None:
@@ -306,25 +331,30 @@ def get_note(note_id: str) -> dict | None:
 
 
 def create_note(title: str = "Untitled", notebook_id: str = "",
-                subject: str = "", topic: str = "", body: str = "") -> dict:
+                subject: str = "", topic: str = "", body: str = "",
+                context: str = "school") -> dict:
     init()
     stamp = now()
     note = {"id": rid(), "notebook_id": notebook_id or ensure_notebook(subject),
             "title": title or "Untitled", "body": body, "blocks": "[]",
             "transcript": "", "subject": subject, "topic": topic, "starred": 0,
             "continues": 0, "thread": "",
+            "context": context if context in ("school", "tuition") else "school",
             "created_at": stamp, "updated_at": stamp}
     with connect() as c:
-        c.execute("INSERT INTO notes VALUES (:id,:notebook_id,:title,:body,:blocks,"
-                  ":transcript,:subject,:topic,:starred,:continues,:thread,"
-                  ":created_at,:updated_at)", note)
+        c.execute(
+            "INSERT INTO notes (id,notebook_id,title,body,blocks,transcript,"
+            "subject,topic,starred,continues,thread,context,created_at,updated_at)"
+            " VALUES (:id,:notebook_id,:title,:body,:blocks,:transcript,:subject,"
+            ":topic,:starred,:continues,:thread,:context,:created_at,:updated_at)",
+            note)
     return get_note(note["id"])
 
 
 def update_note(note_id: str, **patch) -> dict | None:
     init()
     allowed = ("title", "body", "blocks", "transcript", "subject", "topic",
-               "starred", "notebook_id", "continues", "thread")
+               "starred", "notebook_id", "continues", "thread", "context")
     fields, values = [], []
     for k in allowed:
         if k not in patch:

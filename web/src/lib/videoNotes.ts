@@ -96,7 +96,7 @@ function monoToWav(samples: Float32Array, rate = TARGET_RATE): Blob {
     write, so a long file never looks frozen. Returns the note id. */
 export async function videoToNote(
   file: File,
-  opts: { subject?: string; topic?: string },
+  opts: { subject?: string; topic?: string; context?: string },
   onProgress?: (p: VideoProgress) => void,
 ): Promise<{ noteId: string }> {
   try {
@@ -109,7 +109,7 @@ export async function videoToNote(
     const title = file.name.replace(/\.[^.]+$/, "")
     const started = await apiPost<{ id: string; note_id: string }>(
       "/api/record/start",
-      { title, subject: opts.subject || "", topic: opts.topic || title },
+      { title, subject: opts.subject || "", topic: opts.topic || title, context: opts.context || "school" },
     )
 
     for (let c = 0; c < total; c++) {
@@ -145,7 +145,7 @@ export async function videoToNote(
     notes. */
 export async function videosToNotes(
   files: File[],
-  opts: { subject?: string },
+  opts: { subject?: string; context?: string },
   onProgress?: (fileIndex: number, total: number, p: VideoProgress) => void,
 ): Promise<{ made: number; failures: string[] }> {
   let made = 0

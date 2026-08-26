@@ -1,25 +1,30 @@
-/* applock.ts — an optional fingerprint / passkey lock over the whole app.
+/* applock.ts — an optional lock over the app, with a method the student picks.
 
-   This is a DEVICE lock, not a second sign-in. The real identity is still the
-   Google account; this adds a "prove it's you on this device" step when Minerva
-   opens, using the platform authenticator the OS already has — Touch ID on a
-   Mac, Windows Hello, the fingerprint sensor on a phone. The same WebAuthn API
-   backs all of them, so one implementation covers every platform Minerva will
-   ship on.
+   A DEVICE lock, not a second sign-in: the real identity is still the Google
+   account. This adds a "prove it's you on this device" step when Minerva opens.
+   Three methods, chosen per device so the student can use whatever their
+   hardware actually supports:
 
-   Honest about what it is: the unlock succeeds when the OS confirms the
-   fingerprint/PIN, checked on the device. It is a lock screen, the way a notes
-   app locks with Face ID — it keeps a shoulder-surfer or a shared-laptop
-   classmate out, and it is not a server-verified credential. The account itself
-   is still protected by Google sign-in underneath.
+     pin          a 4-6 digit code. Works on EVERY device, always. The reliable
+                  fallback for laptops whose fingerprint/face the browser can't
+                  reach — which is most of them.
+     fingerprint  the OS platform authenticator (Touch ID, Windows Hello,
+                  Android fingerprint) via WebAuthn. Great when it works; some
+                  laptops simply do not expose it to the browser, hence the PIN.
 
-   Everything is stored per-device in localStorage, keyed by the signed-in user,
-   so enabling the lock on your laptop does not force it on the library computer,
-   and one person's lock on a shared machine is not another's. */
+   Everything is stored per-device in localStorage, so a lock on one machine
+   never forces it on another, and passing it once holds for the browser
+   session rather than re-prompting on every navigation. None of it is a
+   server-verified credential; the account stays protected by Google underneath. */
 
-const CRED_KEY = "minerva.lock.credential" // base64 credential id, per user
-const ON_KEY = "minerva.lock.on" // "1" when the lock is enabled here
+export type LockMethod = "none" | "pin" | "fingerprint" | "face"
+
+const METHOD_KEY = "minerva.lock.method"
+const CRED_KEY = "minerva.lock.credential" // fingerprint: base64 credential id
+const PIN_KEY = "minerva.lock.pin" // pin: sha-256 hex of the code
 const SESSION_KEY = "minerva.lock.passed" // set once unlocked this session
+
+/* ---------------------------------------------------------------- helpers */
 
 function b64(bytes: ArrayBuffer): string {
   return btoa(String.fromCharCode(...new Uint8Array(bytes)))
@@ -32,11 +37,104 @@ function randomBytes(n: number): BufferSource {
   crypto.getRandomValues(a)
   return a as BufferSource
 }
+async function sha256hex(text: string): Promise<string> {
+  const data = new TextEncoder().encode(text)
+  const digest = await crypto.subtle.digest("SHA-256", data)
+  return [...new Uint8Array(digest)]
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("")
+}
+function get(k: string): string | null {
+  try {
+    return localStorage.getItem(k)
+  } catch {
+    return null
+  }
+}
+function set(k: string, v: string) {
+  try {
+    localStorage.setItem(k, v)
+  } catch {
+    /* private mode: the lock just will not persist, which is safe */
+  }
+}
+function del(k: string) {
+  try {
+    localStorage.removeItem(k)
+  } catch {
+    /* nothing to remove */
+  }
+}
+
+/* ---------------------------------------------------------------- state */
+
+export function lockMethod(): LockMethod {
+  const m = get(METHOD_KEY)
+  if (m === "pin" || m === "fingerprint" || m === "face") return m
+  return "none"
+}
+
+export function lockEnabled(): boolean {
+  return lockMethod() !== "none"
+}
+
+export function lockPassedThisSession(): boolean {
+  try {
+    return sessionStorage.getItem(SESSION_KEY) === "1"
+  } catch {
+    return false
+  }
+}
+
+export function markPassed() {
+  try {
+    sessionStorage.setItem(SESSION_KEY, "1")
+  } catch {
+    /* private mode: it simply asks again, which is safe */
+  }
+}
+
+/** Turn every lock off on this device. The escape hatch, and the "Off" choice. */
+export function disableLock() {
+  del(METHOD_KEY)
+  del(CRED_KEY)
+  del(PIN_KEY)
+  try {
+    sessionStorage.removeItem(SESSION_KEY)
+  } catch {
+    /* nothing */
+  }
+}
+
+/* ---------------------------------------------------------------- PIN */
+
+/** Set a 4-6 digit PIN and make it the active lock. Works on every device. */
+export async function setPin(pin: string): Promise<void> {
+  const clean = (pin || "").trim()
+  if (!/^\d{4,6}$/.test(clean)) {
+    throw new Error("Choose a PIN of 4 to 6 digits.")
+  }
+  set(PIN_KEY, await sha256hex(clean))
+  set(METHOD_KEY, "pin")
+  markPassed() // just set it; do not immediately lock the student out
+}
+
+/** True if the PIN matches the one stored on this device. */
+export async function checkPin(pin: string): Promise<boolean> {
+  const stored = get(PIN_KEY)
+  if (!stored) return true // no PIN set; do not trap anyone
+  const ok = (await sha256hex((pin || "").trim())) === stored
+  if (ok) markPassed()
+  return ok
+}
+
+/* ---------------------------------------------------------------- fingerprint */
 
 /** Is a platform authenticator (fingerprint/Face/Hello) usable in this browser?
-    False on http (WebAuthn needs a secure context) and on machines with no
-    biometric hardware, so the Settings toggle can explain rather than fail. */
-export async function lockSupported(): Promise<boolean> {
+    False on http (WebAuthn needs a secure context) and where there is no
+    biometric the browser can reach — so the Settings toggle can explain rather
+    than silently fail. */
+export async function fingerprintSupported(): Promise<boolean> {
   try {
     if (
       typeof window === "undefined" ||
@@ -51,40 +149,11 @@ export async function lockSupported(): Promise<boolean> {
   }
 }
 
-export function lockEnabled(): boolean {
-  try {
-    return localStorage.getItem(ON_KEY) === "1" && !!localStorage.getItem(CRED_KEY)
-  } catch {
-    return false
-  }
-}
-
-/** True once the fingerprint has been passed this browser session, so switching
-    tabs or navigating does not re-prompt every time. */
-export function lockPassedThisSession(): boolean {
-  try {
-    return sessionStorage.getItem(SESSION_KEY) === "1"
-  } catch {
-    return false
-  }
-}
-
-function markPassed() {
-  try {
-    sessionStorage.setItem(SESSION_KEY, "1")
-  } catch {
-    /* private mode: it will simply ask again, which is safe */
-  }
-}
-
-/** Turn a raw WebAuthn error into something a student can act on. The browser
-    throws a generic NotAllowedError for a cancel, a timeout and a denied
-    prompt alike, which is why the raw message reads so alarmingly. */
 function friendlyWebauthnError(e: unknown): Error {
   const name = e instanceof Error ? e.name : ""
   if (name === "NotAllowedError" || name === "AbortError") {
     return new Error(
-      "The fingerprint prompt was cancelled or timed out. Try again, and confirm with your fingerprint, Face or PIN when your device asks.",
+      "The prompt was cancelled or timed out. Try again, and confirm with your fingerprint, Face or PIN when your device asks.",
     )
   }
   if (name === "InvalidStateError") {
@@ -92,18 +161,16 @@ function friendlyWebauthnError(e: unknown): Error {
   }
   if (name === "NotSupportedError" || name === "SecurityError") {
     return new Error(
-      "This device or browser can't use a fingerprint lock here. It needs a device unlock (fingerprint/Face/PIN) and a secure (https) connection.",
+      "This device or browser can't use the device unlock here — try the PIN instead.",
     )
   }
   return e instanceof Error ? e : new Error(String(e))
 }
 
-/** Register the device's fingerprint/passkey and turn the lock on.
-    Returns true on success; throws with a readable message on failure. */
-export async function enableLock(userLabel: string): Promise<boolean> {
-  if (!(await lockSupported())) {
+export async function enableFingerprint(userLabel: string): Promise<void> {
+  if (!(await fingerprintSupported())) {
     throw new Error(
-      "This device has no fingerprint, Face or PIN unlock available to the browser.",
+      "This device has no fingerprint/Face the browser can use. Use a PIN instead.",
     )
   }
   let cred: PublicKeyCredential | null
@@ -117,7 +184,6 @@ export async function enableLock(userLabel: string): Promise<boolean> {
           name: userLabel || "student",
           displayName: userLabel || "Minerva student",
         },
-        // ES256 and RS256 — every platform authenticator supports one of them.
         pubKeyCredParams: [
           { type: "public-key", alg: -7 },
           { type: "public-key", alg: -257 },
@@ -134,38 +200,14 @@ export async function enableLock(userLabel: string): Promise<boolean> {
     throw friendlyWebauthnError(e)
   }
   if (!cred) throw new Error("Setup was cancelled.")
-  try {
-    localStorage.setItem(CRED_KEY, b64(cred.rawId))
-    localStorage.setItem(ON_KEY, "1")
-    markPassed() // just proved it; do not immediately lock them out
-  } catch {
-    throw new Error("Could not save the lock on this device.")
-  }
-  return true
+  set(CRED_KEY, b64(cred.rawId))
+  set(METHOD_KEY, "fingerprint")
+  markPassed()
 }
 
-export function disableLock() {
-  try {
-    localStorage.removeItem(ON_KEY)
-    localStorage.removeItem(CRED_KEY)
-    sessionStorage.removeItem(SESSION_KEY)
-  } catch {
-    /* nothing to clear */
-  }
-}
-
-/** Prompt for the fingerprint/passkey and, on success, unlock for this session.
-    Returns true when the OS confirmed the user; false/throws otherwise. */
-export async function unlock(): Promise<boolean> {
-  const id = (() => {
-    try {
-      return localStorage.getItem(CRED_KEY)
-    } catch {
-      return null
-    }
-  })()
-  if (!id) return true // lock not really set up; do not trap the user
-
+export async function unlockFingerprint(): Promise<boolean> {
+  const id = get(CRED_KEY)
+  if (!id) return true
   let assertion: PublicKeyCredential | null
   try {
     assertion = (await navigator.credentials.get({
@@ -179,7 +221,6 @@ export async function unlock(): Promise<boolean> {
   } catch (e) {
     throw friendlyWebauthnError(e)
   }
-
   if (!assertion) throw new Error("Unlock was cancelled.")
   markPassed()
   return true

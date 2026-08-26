@@ -29,10 +29,14 @@ import { useAuth } from "@/lib/auth";
 import { SCHOOL_EMAIL_ENABLED } from "@/lib/firebase";
 import {
   disableLock,
-  enableLock,
-  lockEnabled,
-  lockSupported,
+  enableFingerprint,
+  fingerprintSupported,
+  lockMethod,
+  setPin as setLockPin,
+  type LockMethod,
 } from "@/lib/applock";
+import { faceSupported } from "@/lib/faceLock";
+import FaceCapture from "@/components/FaceCapture";
 import { cn } from "@/lib/utils";
 
 /* -------------------------------------------------------------------------
@@ -353,16 +357,19 @@ export function SettingsPage({ state, refresh }: SettingsPageProps) {
     [tuition, refresh],
   );
 
-  /* Fingerprint lock state. `lockCanUse` is null until the async capability
-     check answers, so the card can say "unavailable" rather than flicker. */
-  const [lockOn, setLockOn] = useState(lockEnabled());
-  const [lockCanUse, setLockCanUse] = useState<boolean | null>(null);
+  /* App-lock state. `method` is the active lock; the student can choose Face,
+     PIN or the device fingerprint, or turn it off. `fpOk` is null until the
+     async capability check answers. */
+  const [method, setMethod] = useState<LockMethod>(lockMethod());
+  const [fpOk, setFpOk] = useState<boolean | null>(null);
   const [lockBusy, setLockBusy] = useState(false);
   const [lockMsg, setLockMsg] = useState("");
+  const [pinDraft, setPinDraft] = useState("");
+  const [enrollingFace, setEnrollingFace] = useState(false);
   useEffect(() => {
     let live = true;
-    lockSupported().then((ok) => live && setLockCanUse(ok));
-    setLockOn(lockEnabled());
+    fingerprintSupported().then((ok) => live && setFpOk(ok));
+    setMethod(lockMethod());
     return () => {
       live = false;
     };
@@ -716,59 +723,153 @@ export function SettingsPage({ state, refresh }: SettingsPageProps) {
 
         {/* ---------------------------------------------------- app lock */}
         <Card
-          label="Fingerprint lock"
-          aside={lockOn ? "on" : lockCanUse === false ? "unavailable" : "off"}
+          label="App lock"
+          aside={
+            method === "none"
+              ? "off"
+              : method === "face"
+                ? "face"
+                : method === "pin"
+                  ? "PIN"
+                  : "fingerprint"
+          }
         >
           <Help>
-            Ask for your fingerprint, Face or device PIN every time Minerva opens
-            on this device — a lock over your notes for a shared or unattended
-            laptop. It uses the unlock your device already has; nothing is sent
-            anywhere, and it is separate from your Google sign-in, which still
-            protects the account itself.
+            Ask for you every time Minerva opens on this device — a lock over your
+            notes on a shared or desktop computer. Choose whichever works on your
+            machine. Nothing is sent anywhere; it is separate from your Google
+            sign-in, which still protects the account itself.
           </Help>
 
-          {lockCanUse === false ? (
-            <p className="mt-2 text-[12.5px] text-muted-foreground">
-              This device has no fingerprint, Face or PIN unlock the browser can
-              use — or the page is not on a secure (https) connection.
-            </p>
+          {enrollingFace ? (
+            <div className="mt-3">
+              <FaceCapture
+                mode="enroll"
+                onSuccess={() => {
+                  setEnrollingFace(false);
+                  setMethod("face");
+                  setLockMsg("Face unlock is on. Minerva will use your camera next time it opens.");
+                }}
+                onCancel={() => setEnrollingFace(false)}
+              />
+            </div>
           ) : (
-            <div className="mt-3 flex items-center gap-2">
-              {lockOn ? (
-                <button
-                  type="button"
-                  className={GHOST}
-                  onClick={() => {
-                    disableLock()
-                    setLockOn(false)
-                    setLockMsg("Fingerprint lock turned off.")
-                  }}
-                >
-                  Turn off
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  className={OUTLINE}
-                  disabled={lockBusy || !user}
-                  onClick={async () => {
-                    setLockBusy(true)
-                    setLockMsg("")
-                    try {
-                      await enableLock(
-                        user?.displayName || user?.email || "student",
-                      )
-                      setLockOn(true)
-                      setLockMsg("On. Minerva will ask for your fingerprint next time it opens.")
-                    } catch (e) {
-                      setLockMsg(e instanceof Error ? e.message : String(e))
-                    } finally {
-                      setLockBusy(false)
+            <div className="mt-3 flex flex-col gap-3">
+              {/* Face — the one desktops can actually use. */}
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <div className="text-[13px] font-medium">Face unlock</div>
+                  <div className="text-[11.5px] text-muted-foreground">
+                    Your webcam. Works on desktops with no fingerprint reader.
+                  </div>
+                </div>
+                {faceSupported() ? (
+                  <button
+                    type="button"
+                    className={OUTLINE}
+                    onClick={() => {
+                      setLockMsg("");
+                      setEnrollingFace(true);
+                    }}
+                  >
+                    {method === "face" ? "Re-scan face" : "Set up Face unlock"}
+                  </button>
+                ) : (
+                  <span className="text-[12px] text-muted-foreground">no camera</span>
+                )}
+              </div>
+
+              {/* PIN — the one that works everywhere. */}
+              <div className="flex flex-wrap items-center justify-between gap-2 border-t pt-3">
+                <div>
+                  <div className="text-[13px] font-medium">PIN</div>
+                  <div className="text-[11.5px] text-muted-foreground">
+                    A 4–6 digit code. Works on every device.
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="password"
+                    inputMode="numeric"
+                    value={pinDraft}
+                    onChange={(e) =>
+                      setPinDraft(e.target.value.replace(/\D/g, "").slice(0, 6))
                     }
-                  }}
-                >
-                  {lockBusy ? "Waiting for your device…" : "Turn on fingerprint lock"}
-                </button>
+                    placeholder="1234"
+                    className="w-24 rounded-lg border bg-background px-3 py-1.5 text-center font-mono text-[14px] tracking-widest outline-none focus-visible:ring-2 focus-visible:ring-brand-ring"
+                  />
+                  <button
+                    type="button"
+                    className={OUTLINE}
+                    disabled={lockBusy || pinDraft.length < 4}
+                    onClick={async () => {
+                      setLockBusy(true);
+                      setLockMsg("");
+                      try {
+                        await setLockPin(pinDraft);
+                        setPinDraft("");
+                        setMethod("pin");
+                        setLockMsg("PIN lock is on.");
+                      } catch (e) {
+                        setLockMsg(e instanceof Error ? e.message : String(e));
+                      } finally {
+                        setLockBusy(false);
+                      }
+                    }}
+                  >
+                    {method === "pin" ? "Change PIN" : "Set PIN"}
+                  </button>
+                </div>
+              </div>
+
+              {/* Fingerprint — only if the browser can actually reach one. */}
+              {fpOk && (
+                <div className="flex flex-wrap items-center justify-between gap-2 border-t pt-3">
+                  <div>
+                    <div className="text-[13px] font-medium">Device fingerprint</div>
+                    <div className="text-[11.5px] text-muted-foreground">
+                      Touch ID / Windows Hello, if your device offers it.
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    className={OUTLINE}
+                    disabled={lockBusy}
+                    onClick={async () => {
+                      setLockBusy(true);
+                      setLockMsg("");
+                      try {
+                        await enableFingerprint(
+                          user?.displayName || user?.email || "student",
+                        );
+                        setMethod("fingerprint");
+                        setLockMsg("Fingerprint lock is on.");
+                      } catch (e) {
+                        setLockMsg(e instanceof Error ? e.message : String(e));
+                      } finally {
+                        setLockBusy(false);
+                      }
+                    }}
+                  >
+                    {method === "fingerprint" ? "Re-enrol" : "Use fingerprint"}
+                  </button>
+                </div>
+              )}
+
+              {method !== "none" && (
+                <div className="border-t pt-3">
+                  <button
+                    type="button"
+                    className={GHOST}
+                    onClick={() => {
+                      disableLock();
+                      setMethod("none");
+                      setLockMsg("App lock turned off.");
+                    }}
+                  >
+                    Turn the lock off
+                  </button>
+                </div>
               )}
             </div>
           )}

@@ -32,6 +32,7 @@ import {
   enableFingerprint,
   fingerprintSupported,
   lockMethod,
+  relock,
   setAccountPin,
   type LockMethod,
 } from "@/lib/applock";
@@ -865,7 +866,16 @@ export function SettingsPage({ state, refresh }: SettingsPageProps) {
               )}
 
               {(accountOn || method !== "none") && (
-                <div className="border-t pt-3">
+                <div className="flex flex-wrap items-center gap-2 border-t pt-3">
+                  {/* See it work right now, instead of waiting for the next
+                      time the app opens. */}
+                  <button
+                    type="button"
+                    className={OUTLINE}
+                    onClick={() => relock()}
+                  >
+                    Lock now (test it)
+                  </button>
                   <button
                     type="button"
                     className={GHOST}

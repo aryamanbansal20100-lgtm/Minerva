@@ -162,6 +162,7 @@ export async function enrollFace(video: HTMLVideoElement): Promise<void> {
       JSON.stringify(Array.from(template, (v) => Math.round(v * 1000) / 1000)),
     )
     localStorage.setItem(METHOD_KEY, "face")
+    localStorage.removeItem("minerva.lock.credential") // face is the one method now
     sessionStorage.setItem(SESSION_KEY, "1") // just enrolled; do not lock out
   } catch {
     throw new Error("Could not save Face unlock on this device.")

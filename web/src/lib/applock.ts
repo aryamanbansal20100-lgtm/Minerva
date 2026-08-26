@@ -21,10 +21,11 @@ import { apiGet, apiPost } from "@/lib/api"
 // The PIN is ACCOUNT-level: it lives on the server, synced, so the lock appears
 // on every device the student signs in on. "pin" as a device method therefore
 // no longer exists — PIN is always the account lock below.
-export type LockMethod = "none" | "fingerprint" | "face"
+export type LockMethod = "none" | "pin" | "fingerprint" | "face"
 
 const METHOD_KEY = "minerva.lock.method"
 const CRED_KEY = "minerva.lock.credential" // fingerprint: base64 credential id
+const FACE_KEY = "minerva.lock.faceprint" // face: enrolled template (mirrors faceLock)
 const SESSION_KEY = "minerva.lock.passed" // set once unlocked this session
 
 /* ---------------------------------------------------------------- helpers */
@@ -64,15 +65,35 @@ function del(k: string) {
 
 /* ---------------------------------------------------------------- state */
 
-/** The FAST unlock enrolled on this device (face or fingerprint), if any. */
+/** The unlock method chosen on THIS device. One at a time: choosing one clears
+    the others, so setting a PIN never leaves a stale fingerprint that would open
+    Windows Hello instead. */
 export function lockMethod(): LockMethod {
   const m = get(METHOD_KEY)
-  if (m === "fingerprint" || m === "face") return m
+  if (m === "pin" || m === "fingerprint" || m === "face") return m
   return "none"
 }
 
 export function lockEnabled(): boolean {
   return lockMethod() !== "none"
+}
+
+/** Wipe every device method, so exactly one is ever active. */
+function clearDeviceMethods() {
+  del(METHOD_KEY)
+  del(CRED_KEY)
+  del(FACE_KEY)
+}
+
+/** Clear this session's pass and reload, so the lock screen appears now — the
+    "Lock now / test it" button in Settings. */
+export function relock() {
+  try {
+    sessionStorage.removeItem(SESSION_KEY)
+  } catch {
+    /* nothing */
+  }
+  location.reload()
 }
 
 /* ------------------------------------------------- account lock (the PIN) */
@@ -88,11 +109,15 @@ export async function accountLockRequired(): Promise<boolean> {
   }
 }
 
-/** Set (or change) the account PIN. Hashed and synced server-side. */
+/** Set (or change) the account PIN, and make PIN the way in on THIS device too.
+    Clears any face/fingerprint so the PIN screen — not Windows Hello — is what
+    opens here. */
 export async function setAccountPin(pin: string): Promise<void> {
   const clean = (pin || "").trim()
   if (!/^\d{4,6}$/.test(clean)) throw new Error("Choose a PIN of 4 to 6 digits.")
   await apiPost("/api/lock/set", { pin: clean })
+  clearDeviceMethods()
+  set(METHOD_KEY, "pin")
   markPassed()
 }
 
@@ -134,8 +159,7 @@ export function markPassed() {
 
 /** Turn every lock off on this device. The escape hatch, and the "Off" choice. */
 export function disableLock() {
-  del(METHOD_KEY)
-  del(CRED_KEY)
+  clearDeviceMethods()
   try {
     sessionStorage.removeItem(SESSION_KEY)
   } catch {
@@ -215,6 +239,7 @@ export async function enableFingerprint(userLabel: string): Promise<void> {
     throw friendlyWebauthnError(e)
   }
   if (!cred) throw new Error("Setup was cancelled.")
+  del(FACE_KEY)                       // fingerprint is now the one method here
   set(CRED_KEY, b64(cred.rawId))
   set(METHOD_KEY, "fingerprint")
   markPassed()

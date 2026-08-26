@@ -668,6 +668,8 @@ class Handler(SimpleHTTPRequestHandler):
                 "vision": timetable.status(),
                 "days": timetable.DAYS,
             })
+        if path == "/api/lock":
+            return self._json({"required": store.lock_required()})
         if path == "/api/subjects":
             return self._json({"subjects": timetable.subjects_for(q.get("curriculum", "")),
                                "curricula": list(timetable.CURRICULUM_SUBJECTS)})
@@ -742,6 +744,26 @@ class Handler(SimpleHTTPRequestHandler):
             # left a term of notes still only on the laptop. This is the button
             # that actually gets them to the cloud.
             return self._json(sync.push_all())
+
+        if path == "/api/lock/set":
+            # Set (or change) the account app-lock PIN. It is hashed and synced,
+            # so the lock then appears on every device this account signs in on.
+            pin = str(payload.get("pin") or "")
+            if not pin.isdigit() or not (4 <= len(pin) <= 6):
+                return self._json({"error": "PIN must be 4-6 digits"}, 400)
+            store.set_lock_pin(pin)
+            sync.push_profile(store.get_profile())
+            return self._json({"ok": True})
+
+        if path == "/api/lock/check":
+            # Verify a PIN entered on the lock screen. The hash never leaves the
+            # server, so a device that has never enrolled can still be unlocked.
+            return self._json({"ok": store.check_lock_pin(str(payload.get("pin") or ""))})
+
+        if path == "/api/lock/off":
+            store.clear_lock()
+            sync.push_profile(store.get_profile())
+            return self._json({"ok": True})
 
         if path == "/api/mail/important":
             # Star or unstar a sender. A starred sender (and, for a school

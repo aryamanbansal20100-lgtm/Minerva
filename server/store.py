@@ -66,6 +66,7 @@ CREATE TABLE IF NOT EXISTS profile (
     timetable TEXT DEFAULT '[]',
     groq_key TEXT DEFAULT '',
     tuition_subjects TEXT DEFAULT '[]',
+    lock_pin TEXT DEFAULT '',
     onboarded INTEGER DEFAULT 0,
     created_at TEXT, updated_at TEXT);
 
@@ -164,6 +165,10 @@ def init() -> None:
             # Subjects the student also attends tuition for -- so tuition notes
             # can live in their own tab, only for those subjects.
             c.execute("ALTER TABLE profile ADD COLUMN tuition_subjects TEXT DEFAULT '[]'")
+        if "lock_pin" not in pcols:
+            # The account-level app-lock PIN (sha-256 hash). Synced, so the lock
+            # follows the student to any device they sign in on.
+            c.execute("ALTER TABLE profile ADD COLUMN lock_pin TEXT DEFAULT ''")
         ncols = {r["name"] for r in c.execute("PRAGMA table_info(notes)")}
         if "continues" not in ncols:
             c.execute("ALTER TABLE notes ADD COLUMN continues INTEGER DEFAULT 0")
@@ -210,7 +215,56 @@ def get_profile() -> dict:
     raw = (p.pop("groq_key", "") or "").strip()
     p["groq_key_set"] = bool(raw)
     p["groq_key_hint"] = ("…" + raw[-4:]) if len(raw) > 4 else ""
+    # The PIN hash never reaches the browser -- only whether one exists, so the
+    # UI knows the account has a lock. The check is done server-side.
+    lock = (p.pop("lock_pin", "") or "").strip()
+    p["lock_set"] = bool(lock)
     return p
+
+
+def _hash_pin(pin: str) -> str:
+    import hashlib
+    # Salted with the account id so the same PIN on two accounts differs, and a
+    # stolen hash cannot be matched against a rainbow table of 4-digit codes.
+    salt = uid()
+    return hashlib.sha256((salt + ":" + (pin or "").strip()).encode()).hexdigest()
+
+
+def set_lock_pin(pin: str) -> None:
+    """Store the account app-lock PIN as a salted hash."""
+    init()
+    with connect() as c:
+        c.execute("UPDATE profile SET lock_pin=?, updated_at=? WHERE id=1",
+                  (_hash_pin(pin), now()))
+
+
+def clear_lock() -> None:
+    init()
+    with connect() as c:
+        c.execute("UPDATE profile SET lock_pin='', updated_at=? WHERE id=1", (now(),))
+
+
+def get_profile_raw_lock() -> str:
+    """The raw stored PIN hash, for the sync layer to mirror. Not for the browser."""
+    init()
+    with connect() as c:
+        row = c.execute("SELECT lock_pin FROM profile WHERE id=1").fetchone()
+    return (dict(row).get("lock_pin") if row else "") or ""
+
+
+def lock_required() -> bool:
+    init()
+    with connect() as c:
+        row = c.execute("SELECT lock_pin FROM profile WHERE id=1").fetchone()
+    return bool(row and (dict(row).get("lock_pin") or "").strip())
+
+
+def check_lock_pin(pin: str) -> bool:
+    init()
+    with connect() as c:
+        row = c.execute("SELECT lock_pin FROM profile WHERE id=1").fetchone()
+    stored = (dict(row).get("lock_pin") if row else "") or ""
+    return bool(stored) and _hash_pin(pin) == stored
 
 
 def groq_key() -> str:
@@ -230,7 +284,7 @@ def save_profile(patch: dict) -> dict:
     init()
     allowed = ("name", "curriculum", "grade", "school", "city", "country",
                "timezone", "subjects", "managebac_ics", "goals", "onboarded",
-               "timetable", "groq_key", "tuition_subjects")
+               "timetable", "groq_key", "tuition_subjects", "lock_pin")
     fields, values = [], []
     for k in allowed:
         if k not in patch:

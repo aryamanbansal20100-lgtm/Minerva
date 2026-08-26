@@ -79,8 +79,13 @@ def push_profile(profile: dict) -> None:
         raw_key = store.groq_key()
     except Exception:
         raw_key = ""
+    try:
+        lock_hash = store.get_profile_raw_lock() if hasattr(store, "get_profile_raw_lock") else ""
+    except Exception:
+        lock_hash = ""
     _fire(lambda uid, p: cloud.put_profile(uid, {
         "groq_key": raw_key,
+        "lock_pin": lock_hash,
         "name": p.get("name", ""), "curriculum": p.get("curriculum", ""),
         "grade": p.get("grade", ""), "school": p.get("school", ""),
         "city": p.get("city", ""), "country": p.get("country", ""),
@@ -160,7 +165,7 @@ def pull_if_new() -> dict:
     store.save_profile({k: remote.get(k) for k in (
         "name", "curriculum", "grade", "school", "city", "country",
         "subjects", "timetable", "managebac_ics", "onboarded",
-        "groq_key", "tuition_subjects") if k in remote})
+        "groq_key", "tuition_subjects", "lock_pin") if k in remote})
 
     notes = cloud.fetch(uid, "notes")
     for n in notes:
@@ -249,7 +254,7 @@ def pull_all() -> dict:
         store.save_profile({k: profile.get(k) for k in (
             "name", "curriculum", "grade", "school", "city", "country",
             "subjects", "timetable", "managebac_ics", "onboarded",
-            "groq_key", "tuition_subjects") if k in profile})
+            "groq_key", "tuition_subjects", "lock_pin") if k in profile})
 
     total = sum(added.values())
     return {"ok": True, **added, "already_had": skipped,

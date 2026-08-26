@@ -1,27 +1,30 @@
 /* applock.ts — an optional lock over the app, with a method the student picks.
 
-   A DEVICE lock, not a second sign-in: the real identity is still the Google
-   account. This adds a "prove it's you on this device" step when Minerva opens.
-   Three methods, chosen per device so the student can use whatever their
-   hardware actually supports:
+   Not a second sign-in: the real identity is still the Google account. This
+   adds a "prove it's you" step when Minerva opens. Two layers:
 
-     pin          a 4-6 digit code. Works on EVERY device, always. The reliable
-                  fallback for laptops whose fingerprint/face the browser can't
-                  reach — which is most of them.
-     fingerprint  the OS platform authenticator (Touch ID, Windows Hello,
-                  Android fingerprint) via WebAuthn. Great when it works; some
-                  laptops simply do not expose it to the browser, hence the PIN.
+     account PIN  a 4-6 digit code, hashed and stored on the SERVER and synced,
+                  so once it is set the lock is required on EVERY device the
+                  student signs in on. This is the cross-device lock, and the
+                  one credential that always travels with the account.
+     device fast  face (faceLock.ts) or the OS fingerprint (WebAuthn), enrolled
+                  per device in localStorage as a quicker way past the same lock
+                  on a machine that has them. Optional; the PIN is always the
+                  fallback.
 
-   Everything is stored per-device in localStorage, so a lock on one machine
-   never forces it on another, and passing it once holds for the browser
-   session rather than re-prompting on every navigation. None of it is a
-   server-verified credential; the account stays protected by Google underneath. */
+   The PIN hash never reaches the browser -- checks happen server-side -- so a
+   brand-new device with no local enrolment can still be unlocked. */
 
-export type LockMethod = "none" | "pin" | "fingerprint" | "face"
+import { apiGet, apiPost } from "@/lib/api"
+
+// A device method is a FAST unlock stored on this device (face/fingerprint).
+// The PIN is ACCOUNT-level: it lives on the server, synced, so the lock appears
+// on every device the student signs in on. "pin" as a device method therefore
+// no longer exists — PIN is always the account lock below.
+export type LockMethod = "none" | "fingerprint" | "face"
 
 const METHOD_KEY = "minerva.lock.method"
 const CRED_KEY = "minerva.lock.credential" // fingerprint: base64 credential id
-const PIN_KEY = "minerva.lock.pin" // pin: sha-256 hex of the code
 const SESSION_KEY = "minerva.lock.passed" // set once unlocked this session
 
 /* ---------------------------------------------------------------- helpers */
@@ -36,13 +39,6 @@ function randomBytes(n: number): BufferSource {
   const a = new Uint8Array(new ArrayBuffer(n))
   crypto.getRandomValues(a)
   return a as BufferSource
-}
-async function sha256hex(text: string): Promise<string> {
-  const data = new TextEncoder().encode(text)
-  const digest = await crypto.subtle.digest("SHA-256", data)
-  return [...new Uint8Array(digest)]
-    .map((b) => b.toString(16).padStart(2, "0"))
-    .join("")
 }
 function get(k: string): string | null {
   try {
@@ -68,14 +64,56 @@ function del(k: string) {
 
 /* ---------------------------------------------------------------- state */
 
+/** The FAST unlock enrolled on this device (face or fingerprint), if any. */
 export function lockMethod(): LockMethod {
   const m = get(METHOD_KEY)
-  if (m === "pin" || m === "fingerprint" || m === "face") return m
+  if (m === "fingerprint" || m === "face") return m
   return "none"
 }
 
 export function lockEnabled(): boolean {
   return lockMethod() !== "none"
+}
+
+/* ------------------------------------------------- account lock (the PIN) */
+
+/** Does this ACCOUNT require a lock? True on every device once a PIN is set.
+    Server-owned, so it follows the student across devices. */
+export async function accountLockRequired(): Promise<boolean> {
+  try {
+    const r = await apiGet<{ required?: boolean }>("/api/lock")
+    return !!r.required
+  } catch {
+    return false // never trap the student behind a failed check
+  }
+}
+
+/** Set (or change) the account PIN. Hashed and synced server-side. */
+export async function setAccountPin(pin: string): Promise<void> {
+  const clean = (pin || "").trim()
+  if (!/^\d{4,6}$/.test(clean)) throw new Error("Choose a PIN of 4 to 6 digits.")
+  await apiPost("/api/lock/set", { pin: clean })
+  markPassed()
+}
+
+/** Check a PIN against the account. The hash never leaves the server, so this
+    works on a device that has never enrolled anything. */
+export async function checkAccountPin(pin: string): Promise<boolean> {
+  try {
+    const r = await apiPost<{ ok?: boolean }>("/api/lock/check", {
+      pin: (pin || "").trim(),
+    })
+    if (r.ok) markPassed()
+    return !!r.ok
+  } catch {
+    return false
+  }
+}
+
+/** Turn the whole account lock off, everywhere. */
+export async function clearAccountLock(): Promise<void> {
+  await apiPost("/api/lock/off", {})
+  disableLock() // also clear this device's fast method
 }
 
 export function lockPassedThisSession(): boolean {
@@ -98,34 +136,11 @@ export function markPassed() {
 export function disableLock() {
   del(METHOD_KEY)
   del(CRED_KEY)
-  del(PIN_KEY)
   try {
     sessionStorage.removeItem(SESSION_KEY)
   } catch {
     /* nothing */
   }
-}
-
-/* ---------------------------------------------------------------- PIN */
-
-/** Set a 4-6 digit PIN and make it the active lock. Works on every device. */
-export async function setPin(pin: string): Promise<void> {
-  const clean = (pin || "").trim()
-  if (!/^\d{4,6}$/.test(clean)) {
-    throw new Error("Choose a PIN of 4 to 6 digits.")
-  }
-  set(PIN_KEY, await sha256hex(clean))
-  set(METHOD_KEY, "pin")
-  markPassed() // just set it; do not immediately lock the student out
-}
-
-/** True if the PIN matches the one stored on this device. */
-export async function checkPin(pin: string): Promise<boolean> {
-  const stored = get(PIN_KEY)
-  if (!stored) return true // no PIN set; do not trap anyone
-  const ok = (await sha256hex((pin || "").trim())) === stored
-  if (ok) markPassed()
-  return ok
 }
 
 /* ---------------------------------------------------------------- fingerprint */

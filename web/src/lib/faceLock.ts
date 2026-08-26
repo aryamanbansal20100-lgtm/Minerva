@@ -5,13 +5,14 @@
    Minerva does the face check itself, entirely in the browser, with no external
    model and nothing sent anywhere.
 
-   How it works, honestly: on set-up it captures several frames, crops the
-   central face region, reduces each to a small brightness-normalised grayscale
-   "faceprint", and averages them into one template stored on this device. To
-   unlock it captures again and measures how similar the new faceprint is (cosine
-   similarity); above a threshold, it opens. Brightness normalisation makes it
-   tolerant of lighting; centring your face in the on-screen oval keeps framing
-   consistent.
+   How it works, honestly: set-up is like a phone's -- the student turns their
+   head while it samples ~16 poses, each cropped to the central face region and
+   reduced to a small brightness-normalised grayscale "faceprint". Storing many
+   poses is the key: to unlock it grabs one live frame and takes the BEST cosine
+   similarity across all enrolled poses, so a slight turn or a lighting change
+   lands near one of them instead of failing a single rigid template. Above a
+   threshold it opens, and a live ring shows how close you are so it feels smooth
+   rather than random.
 
    What it is NOT: it is a convenience lock, not bank security. It has no
    liveness detection, so a photo can fool it, and the real protection remains
@@ -24,7 +25,11 @@ const METHOD_KEY = "minerva.lock.method"
 const SESSION_KEY = "minerva.lock.passed"
 
 const SIZE = 48 // faceprint is SIZE x SIZE grayscale
-const MATCH_THRESHOLD = 0.86 // cosine similarity to accept an unlock
+// Multiple poses are enrolled and unlock matches the CLOSEST one, so a slight
+// turn or lighting change no longer sits on a knife-edge. That makes a slightly
+// more lenient threshold both reliable and quick.
+const MATCH_THRESHOLD = 0.86
+const ENROLL_POSES = 16 // faceprints captured across the head-turn sweep
 
 export function faceSupported(): boolean {
   return (
@@ -129,38 +134,39 @@ export function cosineSim(a: Float32Array, b: Float32Array): number {
   return d ? dot / d : 0
 }
 
-/** Average several faceprints into one steadier template. */
-async function captureAveraged(
-  video: HTMLVideoElement,
-  frames: number,
-): Promise<Float32Array | null> {
-  const prints: Float32Array[] = []
-  for (let i = 0; i < frames * 2 && prints.length < frames; i++) {
-    const p = frameToPrint(video)
-    if (p) prints.push(p)
-    await new Promise((r) => setTimeout(r, 120))
-  }
-  if (!prints.length) return null
-  const avg = new Float32Array(SIZE * SIZE)
-  for (const p of prints) for (let i = 0; i < avg.length; i++) avg[i] += p[i]
-  for (let i = 0; i < avg.length; i++) avg[i] /= prints.length
-  return avg
+function sleep(ms: number) {
+  return new Promise((r) => setTimeout(r, ms))
 }
 
 /* ------------------------------------------------------------- enrol / verify */
 
-/** Learn this face from the live video and make face the active lock. */
-export async function enrollFace(video: HTMLVideoElement): Promise<void> {
-  const template = await captureAveraged(video, 8)
-  if (!template) {
+/** Learn this face across several head positions and make Face the active lock.
+
+    Like a phone's set-up: the student slowly turns their head while this samples
+    a spread of poses over ~5 seconds. Storing many poses and matching the
+    CLOSEST one at unlock is what makes it reliable -- a slight turn or a change
+    in light lands near one of the enrolled poses instead of failing a single
+    rigid template. `onProgress` reports 0..1 to drive the setup ring. */
+export async function enrollFace(
+  video: HTMLVideoElement,
+  onProgress?: (fraction: number) => void,
+): Promise<void> {
+  const poses: number[][] = []
+  const gap = 5000 / ENROLL_POSES // spread the captures across ~5s of movement
+  // A little slack so a couple of unreadable frames don't cut the set short.
+  for (let i = 0; i < ENROLL_POSES + 6 && poses.length < ENROLL_POSES; i++) {
+    const p = frameToPrint(video)
+    if (p) {
+      poses.push(Array.from(p, (v) => Math.round(v * 1000) / 1000))
+      onProgress?.(poses.length / ENROLL_POSES)
+    }
+    await sleep(gap)
+  }
+  if (poses.length < 4) {
     throw new Error("Could not read your face — make sure it is lit and centred.")
   }
   try {
-    // Round to 3 dp to keep the stored template small.
-    localStorage.setItem(
-      FACE_KEY,
-      JSON.stringify(Array.from(template, (v) => Math.round(v * 1000) / 1000)),
-    )
+    localStorage.setItem(FACE_KEY, JSON.stringify(poses))
     localStorage.setItem(METHOD_KEY, "face")
     localStorage.removeItem("minerva.lock.credential") // face is the one method now
     sessionStorage.setItem(SESSION_KEY, "1") // just enrolled; do not lock out
@@ -169,20 +175,34 @@ export async function enrollFace(video: HTMLVideoElement): Promise<void> {
   }
 }
 
-/** Measure the best similarity of the live face to the enrolled template.
-    Returns the similarity (0..1); the caller compares it to matchThreshold(). */
-export async function verifyFaceScore(video: HTMLVideoElement): Promise<number> {
-  let storedRaw: string | null
+/** The enrolled poses as Float32 vectors. Handles the old single-template
+    format too, so a face enrolled before this update still works. */
+function loadTemplates(): Float32Array[] {
+  let raw: string | null
   try {
-    storedRaw = localStorage.getItem(FACE_KEY)
+    raw = localStorage.getItem(FACE_KEY)
   } catch {
-    storedRaw = null
+    raw = null
   }
-  if (!storedRaw) return 1 // no template; do not trap the user
-  const stored = Float32Array.from(JSON.parse(storedRaw) as number[])
-  const live = await captureAveraged(video, 4)
+  if (!raw) return []
+  const parsed = JSON.parse(raw) as number[] | number[][]
+  const rows = Array.isArray(parsed[0]) ? (parsed as number[][]) : [parsed as number[]]
+  return rows.map((r) => Float32Array.from(r))
+}
+
+/** The best similarity of a SINGLE live frame to any enrolled pose (0..1).
+    One frame, not an average, so the meter responds immediately as the student
+    lines up. Returns 1 when nothing is enrolled, so it never traps anyone. */
+export function verifyFaceScore(video: HTMLVideoElement): number {
+  const templates = loadTemplates()
+  if (!templates.length) return 1
+  const live = frameToPrint(video)
   if (!live) return 0
-  return cosineSim(stored, live)
+  let best = 0
+  for (const t of templates) {
+    if (t.length === live.length) best = Math.max(best, cosineSim(t, live))
+  }
+  return best
 }
 
 export function matchThreshold(): number {

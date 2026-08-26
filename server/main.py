@@ -19,7 +19,7 @@ from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 from . import (ai, auth, cloud, config, mail, managebac, net, pdftext, readfile,
-               search,
+               search, shares,
                store, sync, timetable, transcribe)
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -503,6 +503,126 @@ class Handler(SimpleHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    def _html(self, body: str, code: int = 200):
+        data = body.encode("utf-8")
+        self.send_response(code)
+        self.send_header("Content-Type", "text/html; charset=utf-8")
+        self.send_header("Content-Length", str(len(data)))
+        self.end_headers()
+        self.wfile.write(data)
+
+    def _download(self, data: bytes, filename: str, mime: str):
+        self.send_response(200)
+        self.send_header("Content-Type", mime)
+        self.send_header("Content-Length", str(len(data)))
+        self.send_header("Content-Disposition",
+                         'attachment; filename="%s"' % filename)
+        self.end_headers()
+        self.wfile.write(data)
+
+    def _share_open_js(self):
+        data = shares.open_js().encode("utf-8")
+        self.send_response(200)
+        self.send_header("Content-Type", "application/javascript; charset=utf-8")
+        self.send_header("Content-Length", str(len(data)))
+        self.end_headers()
+        self.wfile.write(data)
+
+    def _share_public(self, path: str):
+        """Serve a shared note to anyone with the link, no sign-in.
+
+            /s/<token>            the web page (and one counted view)
+            /s/<token>/word       the note as a Word .docx
+            /s/<token>/markdown   the note as Markdown
+
+        A revoked or unknown token gives a plain "not available" page, never a
+        hint that the token was once real.
+        """
+        parts = [p for p in path[len("/s/"):].split("/") if p]
+        token = parts[0] if parts else ""
+        fmt = parts[1] if len(parts) > 1 else ""
+        if not shares.valid_token(token):
+            return self._html(shares.not_found_html(), 404)
+        record = shares.load(token)
+        if not record or record.get("revoked"):
+            return self._html(shares.not_found_html(), 404)
+        if fmt == "word":
+            return self._download(
+                shares.docx_bytes(record), shares.docx_filename(record),
+                "application/vnd.openxmlformats-officedocument."
+                "wordprocessingml.document")
+        if fmt == "markdown":
+            name = shares.docx_filename(record)[:-5] + ".md"
+            return self._download(shares.markdown_text(record).encode("utf-8"),
+                                  name, "text/markdown; charset=utf-8")
+        shares.bump_views(token)
+        return self._html(shares.landing_html(record), 200)
+
+    def _snapshot_of(self, note: dict) -> dict:
+        """The frozen copy that gets shared: the note's finished content, and
+        nothing about the account it came from."""
+        blocks = note.get("blocks") or []
+        summary = ""
+        for b in blocks:
+            if isinstance(b, dict) and b.get("type") == "summary":
+                summary = b.get("text", "")
+                break
+        return {
+            "note_id": note.get("id", ""),
+            "title": note.get("title") or "Untitled",
+            "subject": note.get("subject") or "",
+            "topic": note.get("topic") or "",
+            "summary": summary,
+            "blocks": blocks,
+            "body": note.get("body") or "",
+        }
+
+    def _owner_name(self) -> str:
+        """The display name shown publicly on a share — and ONLY a display name.
+        Never the account email: that would publish PII to anyone with the link
+        and bake it into every downloaded copy. When there is no name we return
+        "", and the page falls back to a generic "a Minerva student"."""
+        name = (store.get_profile().get("name") or "").strip()
+        if name:
+            return name
+        u = getattr(self, "_user", None) or {}
+        return (u.get("name") or "").strip()
+
+    def _share_create(self, payload: dict):
+        note = store.get_note(payload.get("note_id", ""))
+        if not note:
+            return self._json({"error": "That note no longer exists."}, 404)
+        record = shares.create(store.uid(), self._owner_name(),
+                               self._snapshot_of(note))
+        sync.push_share(record)
+        return self._json({
+            "token": record["token"],
+            "path": "/s/" + record["token"],
+            "views": int(record.get("views") or 0),
+        })
+
+    def _share_add(self, payload: dict):
+        """Copy a shared note into the signed-in student's own notes."""
+        record = shares.load(payload.get("token", ""))
+        if not record or record.get("revoked"):
+            return self._json({"error": "This shared note isn't available."}, 404)
+        view = shares.public_view(record)
+        marker = "share:" + record["token"]
+        # Added it before? Open that copy again rather than making a second.
+        existing = store.note_by_thread(marker)
+        if existing:
+            return self._json({"note_id": existing, "existed": True})
+        made = store.create_note(
+            title=view["title"] or "Shared note",
+            subject=view["subject"], topic=view["topic"])
+        body = ""
+        if view.get("owner_name"):
+            body = "Added from a note shared by " + view["owner_name"] + "."
+        note = store.update_note(made["id"], blocks=view.get("blocks") or [],
+                                 body=body, thread=marker)
+        sync.push_note(note)
+        return self._json({"note_id": made["id"], "existed": False})
+
     def _authorise(self) -> bool:
         """Bind this request to a verified Google account, or refuse it.
 
@@ -544,6 +664,14 @@ class Handler(SimpleHTTPRequestHandler):
     # -- GET -------------------------------------------------------------
     def do_GET(self):
         path = urllib.parse.urlparse(self.path).path
+        # Public share routes: a shared note, and the tiny script that decides
+        # whether to open it in the app or leave it on the web page. Both are
+        # deliberately BEFORE _authorise -- a visitor with no account is exactly
+        # who these are for; the unguessable token is the only credential.
+        if path == "/share-open.js":
+            return self._share_open_js()
+        if path.startswith("/s/"):
+            return self._share_public(path)
         if not path.startswith("/api/"):
             if path == "/" or "." not in Path(path).name:
                 return self._index()
@@ -670,6 +798,14 @@ class Handler(SimpleHTTPRequestHandler):
             })
         if path == "/api/lock":
             return self._json({"required": store.lock_required()})
+        if path == "/api/share/mine":
+            return self._json({"shares": shares.list_for_owner(store.uid())})
+        if path == "/api/share/view":
+            record = shares.load(q.get("token", ""))
+            if not record or record.get("revoked"):
+                return self._json({"error": "This shared note isn't available."}, 404)
+            shares.bump_views(record.get("token", ""))
+            return self._json({"share": shares.public_view(record)})
         if path == "/api/subjects":
             return self._json({"subjects": timetable.subjects_for(q.get("curriculum", "")),
                                "curricula": list(timetable.CURRICULUM_SUBJECTS)})
@@ -878,6 +1014,23 @@ class Handler(SimpleHTTPRequestHandler):
         if path == "/api/note/delete":
             sync.delete_note(payload.get("id", ""))
             return self._json({"ok": store.delete_note(payload.get("id", ""))})
+
+        if path == "/api/share/create":
+            return self._share_create(payload)
+        if path == "/api/share/revoke":
+            ok = shares.revoke(payload.get("token", ""), store.uid())
+            if ok:
+                # Push the kill SYNCHRONOUSLY, not fire-and-forget. Revoke is the
+                # one share write where a swallowed failure is dangerous: if the
+                # cloud never learns the link is dead and the free host then wipes
+                # its disk, the next rehydrate would bring the link back to life.
+                # Blocking here means the cloud reflects the revoke before we say
+                # "stopped" (best-effort still — an unreachable cloud cannot be
+                # helped, but that is the rare case, not the silent common one).
+                sync.push_share_now(shares.load(payload.get("token", "")))
+            return self._json({"ok": ok})
+        if path == "/api/share/add":
+            return self._share_add(payload)
 
         if path == "/api/notes/from-documents":
             return self._notes_from_documents(payload)

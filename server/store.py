@@ -436,6 +436,19 @@ def delete_note(note_id: str) -> bool:
     return cur.rowcount > 0
 
 
+def note_by_thread(thread: str) -> str | None:
+    """The id of a note carrying this thread tag, if any. Used to tell whether a
+    shared note has already been added, so 'Add to my notes' twice reopens the
+    one copy instead of piling up duplicates."""
+    if not thread:
+        return None
+    init()
+    with connect() as c:
+        row = c.execute("SELECT id FROM notes WHERE thread=? LIMIT 1",
+                        (thread,)).fetchone()
+    return row["id"] if row else None
+
+
 def resumable(subject: str, days: int = 21) -> dict | None:
     """The most recent lesson in this subject that ended mid-topic.
 
@@ -477,7 +490,7 @@ def restore_note(row: dict) -> None:
              row.get("title", "Untitled"), row.get("body", ""),
              json.dumps(row.get("blocks") or []), row.get("transcript", ""),
              row.get("subject", ""), row.get("topic", ""), 0,
-             int(bool(row.get("continues"))), "", ctx,
+             int(bool(row.get("continues"))), row.get("thread") or "", ctx,
              row.get("created_at") or stamp, stamp))
 
 

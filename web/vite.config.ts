@@ -12,6 +12,12 @@ export default defineConfig({
     port: 5173,
     // The Python server keeps the API keys and the database. React never talks
     // to Groq or Gemini directly; it calls our own /api and the proxy forwards.
-    proxy: { "/api": { target: "http://localhost:7400", changeOrigin: true } },
+    // /s and /share-open.js are the public share routes, also Python-served, so
+    // a share link opened during local dev works instead of hitting the SPA.
+    proxy: {
+      "/api": { target: "http://localhost:7400", changeOrigin: true },
+      "/s": { target: "http://localhost:7400", changeOrigin: true },
+      "/share-open.js": { target: "http://localhost:7400", changeOrigin: true },
+    },
   },
 })

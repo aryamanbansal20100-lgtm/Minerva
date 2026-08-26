@@ -4,6 +4,7 @@ import { api } from "@/lib/api"
 import { useAuth, identityOf } from "@/lib/auth"
 import { NotesPage } from "@/pages/NotesPage"
 import NotePage from "@/pages/NotePage"
+import SharedNotePage from "@/pages/SharedNotePage"
 import { TimetablePage } from "@/pages/TimetablePage"
 import { CalendarPage } from "@/pages/CalendarPage"
 import DuePage from "@/pages/DuePage"
@@ -36,6 +37,7 @@ type State = {
 type Route =
   | { name: "notes" }
   | { name: "note"; id: string }
+  | { name: "shared"; token: string }
   | { name: "book"; subject: string }
   | { name: "assessments" }
   | { name: "practice"; subject?: string }
@@ -53,6 +55,8 @@ function parseHash(): Route {
   switch (head) {
     case "note":
       return { name: "note", id: arg }
+    case "shared":
+      return { name: "shared", token: arg }
     case "book":
       return { name: "book", subject: arg }
     case "assessments":
@@ -122,6 +126,18 @@ export default function App() {
     return () => window.removeEventListener("hashchange", onHash)
   }, [])
 
+  /* Remember, on THIS browser, that it has the app. A shared link's landing
+     page reads this flag: set, it forwards the visitor straight into Minerva;
+     unset, it leaves them on the web page with the Word download. App only ever
+     renders for a signed-in student, so reaching here is proof enough. */
+  useEffect(() => {
+    try {
+      localStorage.setItem("minerva.seen", "1")
+    } catch {
+      /* private mode: the link simply shows its web page, which is fine */
+    }
+  }, [])
+
   const refresh = useCallback(async () => {
     try {
       setState(await api.get<State>("/api/state"))
@@ -184,7 +200,10 @@ export default function App() {
   }, [refresh])
 
   const id = useMemo(() => identityOf(user), [user])
-  const openTop = route.name === "note" || route.name === "book" ? "notes" : route.name
+  const openTop =
+    route.name === "note" || route.name === "book" || route.name === "shared"
+      ? "notes"
+      : route.name
   const openTasks = (state?.tasks || []).filter((t) => !t.done).length
 
   /* First run: a signed-in account that has never been set up has no subjects
@@ -219,7 +238,10 @@ export default function App() {
     !state.profile?.onboarded &&
     !(state.profile?.subjects && state.profile.subjects.length > 0)
 
-  if (needsSetup) {
+  /* A shared link is the one screen that must work before setup: a friend who
+     just signed in to read a note you sent should see the note, not a
+     questionnaire. They can set Minerva up afterwards. */
+  if (needsSetup && route.name !== "shared") {
     return (
       <Onboarding
         initialName={state?.profile?.name || user?.displayName || ""}
@@ -467,6 +489,14 @@ export default function App() {
         )}
         {route.name === "note" && (
           <NotePage id={route.id} refresh={refresh} onLeave={() => go("#/notes")} />
+        )}
+        {route.name === "shared" && (
+          <SharedNotePage
+            token={route.token}
+            onOpenNote={(nid) => go("#/note/" + nid)}
+            onLeave={() => go("#/notes")}
+            onAdded={refresh}
+          />
         )}
         {route.name === "book" && (
           <NotebookPage

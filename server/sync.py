@@ -15,7 +15,7 @@ from __future__ import annotations
 import pathlib
 import threading
 
-from . import cloud, store
+from . import cloud, shares, store
 
 _pulled: set[str] = set()
 _lock = threading.Lock()
@@ -46,6 +46,9 @@ def push_note(note: dict) -> None:
         "subject": n.get("subject", ""), "topic": n.get("topic", ""),
         "continues": bool(n.get("continues")),
         "context": n.get("context", "school"),
+        # Carried so 'Add to my notes' dedupe (the 'share:<token>' marker) still
+        # holds after a note round-trips through the cloud to another device.
+        "thread": n.get("thread", ""),
         "created_at": n.get("created_at", ""), "updated_at": n.get("updated_at", ""),
     }), note)
 
@@ -94,6 +97,28 @@ def push_profile(profile: dict) -> None:
         "managebac_ics": p.get("managebac_ics", ""),
         "onboarded": bool(p.get("onboarded")),
     }), profile)
+
+
+def push_share(record: dict) -> None:
+    """Mirror a share into the owner's own cloud space, so a shared link is as
+    durable as the notes behind it and survives the free host wiping its disk.
+    The snapshot rides as one JSON string — see shares.to_cloud_row."""
+    if not record:
+        return
+    row = shares.to_cloud_row(record)
+    _fire(lambda uid, r: cloud.put(uid, "shares", r["token"], r), row)
+
+
+def push_share_now(record: dict) -> bool:
+    """Mirror a share synchronously and report whether it landed. Used for a
+    revoke, where a silently-lost write could later resurrect a killed link."""
+    if not record or not cloud.enabled() or not cloud.token():
+        return False
+    row = shares.to_cloud_row(record)
+    try:
+        return cloud.put(store.uid(), "shares", row["token"], row)
+    except Exception:
+        return False
 
 
 def push_document(doc: dict, blob: bytes) -> None:
@@ -187,6 +212,9 @@ def pull_if_new() -> dict:
         store.add_document(d.get("subject", ""), d.get("name", "file"),
                            d.get("mime", ""), blob, d.get("text", ""), "cloud")
         restored += 1
+
+    for row in cloud.fetch(uid, "shares"):
+        shares.restore_from_cloud(uid, row)
     return {"pulled": True, "notes": len(notes), "tasks": len(tasks),
             "documents": restored}
 
@@ -249,6 +277,9 @@ def pull_all() -> dict:
                            row.get("mime", ""), blob, row.get("text", ""), "cloud")
         added["documents"] += 1
 
+    for row in cloud.fetch(uid, "shares"):
+        shares.restore_from_cloud(uid, row)
+
     profile = cloud.get_profile(uid)
     if profile and not store.get_profile().get("onboarded"):
         store.save_profile({k: profile.get(k) for k in (
@@ -285,7 +316,7 @@ def push_all() -> dict:
     if not cloud.token():
         return {"ok": False, "message": "Sign in with Google first."}
 
-    done = {"profile": 0, "notes": 0, "tasks": 0, "documents": 0}
+    done = {"profile": 0, "notes": 0, "tasks": 0, "documents": 0, "shares": 0}
     failed = []
 
     if cloud.put_profile(uid, store.get_profile()):
@@ -301,6 +332,8 @@ def push_all() -> dict:
             "transcript": full.get("transcript", ""),
             "subject": full.get("subject", ""), "topic": full.get("topic", ""),
             "continues": bool(full.get("continues")),
+            "context": full.get("context", "school"),
+            "thread": full.get("thread", ""),
             "created_at": full.get("created_at", ""),
             "updated_at": full.get("updated_at", ""),
         }
@@ -340,6 +373,11 @@ def push_all() -> dict:
                                   row.get("mime", ""), blob)
         else:
             failed.append("doc:" + (row.get("name") or row["id"])[:30])
+
+    for s in shares.list_for_owner(uid):
+        rec = shares.load(s["token"])
+        if rec and cloud.put(uid, "shares", rec["token"], shares.to_cloud_row(rec)):
+            done["shares"] += 1
 
     ok = not failed
     total = done["notes"] + done["tasks"] + done["documents"]

@@ -134,6 +134,14 @@ function resolveApiBase(): string {
 
 const API_BASE = resolveApiBase();
 
+/* The origin that serves the Python backend — "" when it is the same origin the
+   app is served from. Share links point at this, because the public /s/<token>
+   pages and /share-open.js are served ONLY by the Python server, never by a
+   static host like Netlify. */
+export function apiBase(): string {
+  return API_BASE;
+}
+
 function apiUrl(path: string): string {
   return API_BASE && path.startsWith("/api/") ? API_BASE + path : path;
 }

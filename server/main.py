@@ -442,7 +442,7 @@ class Handler(SimpleHTTPRequestHandler):
         # The microphone is the whole product, so it stays allowed for this
         # origin. Everything else a page can ask a browser for is refused.
         self.send_header("Permissions-Policy",
-                         "microphone=(self), camera=(), geolocation=(), "
+                         "microphone=(self), camera=(self), geolocation=(), "
                          "payment=(), usb=(), interest-cohort=()")
         self.send_header("Content-Security-Policy", security_policy())
         # Browsers ignore HSTS over plain http, so this is inert on localhost

@@ -325,12 +325,7 @@ export default function App() {
         </div>
 
         <nav className="shrink-0 space-y-px p-2">
-          {NAV.filter(
-            (n) =>
-              n.match !== "tuition" ||
-              (state?.profile?.tuition_subjects &&
-                state.profile.tuition_subjects.length > 0),
-          ).map((n) => (
+          {NAV.map((n) => (
             <button
               key={n.hash}
               onClick={() => go(n.hash)}

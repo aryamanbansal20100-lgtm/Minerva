@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import {
   accountLockRequired,
   checkAccountPin,
@@ -85,6 +85,53 @@ export default function LockGate({ children }: { children: React.ReactNode }) {
       setBusy(false)
     }
   }, [pin])
+
+  /* Re-lock after the machine sleeps, but never on a tab/app switch.
+
+     The tell is simple: while the computer is awake a heartbeat keeps ticking
+     even on a hidden tab, so switching away and back leaves only a small gap and
+     nothing happens. When the machine SLEEPS, JavaScript stops entirely, so on
+     wake the gap since the last tick is large -- that is when the lock comes
+     back. A 90-second grace means a quick glance at another tab is never enough
+     to trip it. */
+  const lastTick = useRef(Date.now())
+  const GRACE_MS = 90_000
+  useEffect(() => {
+    // Only meaningful once something actually locks this app.
+    if (required !== true && device === "none") return
+    const relock = () => {
+      try {
+        sessionStorage.removeItem("minerva.lock.passed")
+      } catch {
+        /* nothing */
+      }
+      setPassed(false)
+      setUsePin(device === "none")
+      setPin("")
+      setError("")
+    }
+    const check = () => {
+      const now = Date.now()
+      if (now - lastTick.current > GRACE_MS) relock()
+      lastTick.current = now
+    }
+    // A heartbeat that keeps running while the machine is awake (even hidden,
+    // just throttled) but stops dead during sleep.
+    const beat = window.setInterval(check, 20_000)
+    // And check the instant the window is looked at again, so waking from sleep
+    // re-locks immediately rather than up to 20s later.
+    const onFocus = () => check()
+    const onVisible = () => {
+      if (document.visibilityState === "visible") check()
+    }
+    window.addEventListener("focus", onFocus)
+    document.addEventListener("visibilitychange", onVisible)
+    return () => {
+      window.clearInterval(beat)
+      window.removeEventListener("focus", onFocus)
+      document.removeEventListener("visibilitychange", onVisible)
+    }
+  }, [required, device])
 
   // Fingerprint prompts itself once when it's the shown method.
   useEffect(() => {

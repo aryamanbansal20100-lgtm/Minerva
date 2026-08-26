@@ -45,6 +45,7 @@ def push_note(note: dict) -> None:
         "blocks": n.get("blocks", []), "transcript": n.get("transcript", ""),
         "subject": n.get("subject", ""), "topic": n.get("topic", ""),
         "continues": bool(n.get("continues")),
+        "context": n.get("context", "school"),
         "created_at": n.get("created_at", ""), "updated_at": n.get("updated_at", ""),
     }), note)
 
@@ -84,6 +85,7 @@ def push_profile(profile: dict) -> None:
         "grade": p.get("grade", ""), "school": p.get("school", ""),
         "city": p.get("city", ""), "country": p.get("country", ""),
         "subjects": p.get("subjects", []), "timetable": p.get("timetable", []),
+        "tuition_subjects": p.get("tuition_subjects", []),
         "managebac_ics": p.get("managebac_ics", ""),
         "onboarded": bool(p.get("onboarded")),
     }), profile)
@@ -158,7 +160,7 @@ def pull_if_new() -> dict:
     store.save_profile({k: remote.get(k) for k in (
         "name", "curriculum", "grade", "school", "city", "country",
         "subjects", "timetable", "managebac_ics", "onboarded",
-        "groq_key") if k in remote})
+        "groq_key", "tuition_subjects") if k in remote})
 
     notes = cloud.fetch(uid, "notes")
     for n in notes:
@@ -247,7 +249,7 @@ def pull_all() -> dict:
         store.save_profile({k: profile.get(k) for k in (
             "name", "curriculum", "grade", "school", "city", "country",
             "subjects", "timetable", "managebac_ics", "onboarded",
-            "groq_key") if k in profile})
+            "groq_key", "tuition_subjects") if k in profile})
 
     total = sum(added.values())
     return {"ok": True, **added, "already_had": skipped,

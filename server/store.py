@@ -413,15 +413,17 @@ def restore_note(row: dict) -> None:
         return
     stamp = row.get("updated_at") or now()
     with connect() as c:
+        ctx = row.get("context") if row.get("context") in ("school", "tuition") else "school"
         c.execute(
             "INSERT OR REPLACE INTO notes (id,notebook_id,title,body,blocks,"
-            "transcript,subject,topic,starred,continues,thread,created_at,updated_at)"
-            " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            "transcript,subject,topic,starred,continues,thread,context,"
+            "created_at,updated_at)"
+            " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
             (row["id"], ensure_notebook(row.get("subject", "")),
              row.get("title", "Untitled"), row.get("body", ""),
              json.dumps(row.get("blocks") or []), row.get("transcript", ""),
              row.get("subject", ""), row.get("topic", ""), 0,
-             int(bool(row.get("continues"))), "",
+             int(bool(row.get("continues"))), "", ctx,
              row.get("created_at") or stamp, stamp))
 
 

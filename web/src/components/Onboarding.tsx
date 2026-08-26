@@ -100,6 +100,13 @@ export default function Onboarding({
         groq_key: key.trim() || undefined,
         onboarded: true,
       })
+      // Remember on THIS browser that setup is done, so a later server reset
+      // (the free host wipes its disk on redeploy) never re-pops the form.
+      try {
+        localStorage.setItem("minerva.onboarded", "1")
+      } catch {
+        /* private mode: the server flag still guards it */
+      }
       onDone()
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))

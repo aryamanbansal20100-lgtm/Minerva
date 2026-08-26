@@ -189,10 +189,33 @@ export default function App() {
 
   /* First run: a signed-in account that has never been set up has no subjects
      to organise anything around. Show the setup form instead of a blank app.
-     Gated on both flags so an existing, configured account is never sent back
-     through it, and only once state has loaded so the shell does not flash. */
+
+     The localStorage guard is what stops the questionnaire coming back. The
+     free host wipes its disk on every redeploy, which resets the server profile
+     to onboarded=0 -- so without this, the form popped again after every deploy
+     even for someone who set up weeks ago. Once a browser has seen setup
+     completed, it never shows it again, whatever the server says. A genuinely
+     new browser has no flag and still gets it. */
+  useEffect(() => {
+    if (state?.profile?.onboarded) {
+      try {
+        localStorage.setItem("minerva.onboarded", "1")
+      } catch {
+        /* private mode; the server flag still guards it */
+      }
+    }
+  }, [state?.profile?.onboarded])
+
+  let seenSetup = false
+  try {
+    seenSetup = localStorage.getItem("minerva.onboarded") === "1"
+  } catch {
+    /* no localStorage: fall back to the server flags below */
+  }
+
   const needsSetup =
     !!state &&
+    !seenSetup &&
     !state.profile?.onboarded &&
     !(state.profile?.subjects && state.profile.subjects.length > 0)
 

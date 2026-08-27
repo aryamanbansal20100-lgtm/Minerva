@@ -36,7 +36,16 @@ export default function FaceCapture({
   const [ready, setReady] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState("")
-  const [progress, setProgress] = useState(0) // 0..1, drives the ring
+  const [progress, setProgress] = useState(0)
+  /* What the detector is seeing right now, drawn over the video. Without this
+     the student cannot tell "it cannot find my face" from "it found my face and
+     decided it is not me" — and those need opposite fixes (move/light vs. set up
+     again). Showing the box turns a black box into something anyone can debug. */
+  const [seen, setSeen] = useState<{
+    box: { x: number; y: number; size: number } | null
+    guessed: boolean
+    score: number
+  }>({ box: null, guessed: false, score: 0 }) // 0..1, drives the ring
   const [hint, setHint] = useState(
     mode === "enroll"
       ? "Centre your face, then press Start."
@@ -100,7 +109,8 @@ export default function FaceCapture({
     const th = matchThreshold()
     const tick = () => {
       if (!alive || !videoRef.current) return
-      const { score, faceFound } = readFace(videoRef.current)
+      const { score, faceFound, box, guessed } = readFace(videoRef.current)
+      setSeen({ box, guessed, score })
 
       if (!faceFound) {
         streak = 0
@@ -157,6 +167,24 @@ export default function FaceCapture({
           />
         </svg>
         <div className="absolute inset-[12px] overflow-hidden rounded-full bg-black">
+          {/* What the detector found, drawn over the picture. Green when it
+              genuinely located a face, amber when detection failed and it fell
+              back to a centred guess — the case that used to look identical from
+              the outside and behave completely differently. Mirrored to match
+              the flipped video so the box sits over the real face. */}
+          {mode === "verify" && seen.box && videoRef.current?.videoWidth ? (
+            <div
+              aria-hidden="true"
+              className="pointer-events-none absolute z-10 rounded-md border-2 transition-all duration-150"
+              style={{
+                borderColor: seen.guessed ? "var(--warn)" : "var(--ok)",
+                left: `${(1 - (seen.box.x + seen.box.size) / videoRef.current.videoWidth) * 100}%`,
+                top: `${(seen.box.y / videoRef.current.videoHeight) * 100}%`,
+                width: `${(seen.box.size / videoRef.current.videoWidth) * 100}%`,
+                height: `${(seen.box.size / videoRef.current.videoHeight) * 100}%`,
+              }}
+            />
+          ) : null}
           <video
             ref={videoRef}
             muted
@@ -169,8 +197,20 @@ export default function FaceCapture({
             </div>
           )}
           {(busy || mode === "verify") && ready && (
-            <div className="absolute inset-x-0 bottom-2 text-center font-mono text-[11px] text-white/80">
-              {pct}%
+            <div className="absolute inset-x-0 bottom-2 z-10 text-center font-mono text-[10.5px] text-white/85">
+              {mode === "verify" ? (
+                <>
+                  {seen.box
+                    ? seen.guessed
+                      ? "no face found — guessing"
+                      : "face found"
+                    : "looking…"}
+                  {" · "}
+                  {Math.round(seen.score * 100)}/{Math.round(matchThreshold() * 100)}
+                </>
+              ) : (
+                <>{pct}%</>
+              )}
             </div>
           )}
         </div>

@@ -334,8 +334,22 @@ function centreBox(video: HTMLVideoElement): FaceBox | null {
   return { x: (vw - size) / 2, y: (vh - size) / 2, size, coverage: 0 }
 }
 
+/** The box the last descriptor was taken from, so the UI can draw exactly what
+    the matcher looked at. Diagnosing "it will not recognise me" is guesswork
+    without this: the student cannot tell whether the camera found their face at
+    all or found it and disagreed, and those need opposite fixes. */
+let lastBox: FaceBox | null = null
+let lastBoxWasGuess = false
+
+export function lastFaceBox(): { box: FaceBox | null; guessed: boolean } {
+  return { box: lastBox, guessed: lastBoxWasGuess }
+}
+
 export function faceDescriptor(video: HTMLVideoElement): Float32Array | null {
-  const box = locateFace(video) || centreBox(video)
+  const found = locateFace(video)
+  const box = found || centreBox(video)
+  lastBox = box
+  lastBoxWasGuess = !found
   if (!box) return null
 
   const c = canvasOf("face")
@@ -500,6 +514,10 @@ export interface FaceReading {
   score: number
   /** False when no face could be found in the frame at all. */
   faceFound: boolean
+  /** Where it looked, so the screen can draw it. */
+  box: FaceBox | null
+  /** True when detection failed and a centred guess was used instead. */
+  guessed: boolean
 }
 
 /**
@@ -510,11 +528,12 @@ export interface FaceReading {
 export function readFace(video: HTMLVideoElement): FaceReading {
   const templates = loadTemplates()
   const live = faceDescriptor(video)
-  if (!live) return { score: 0, faceFound: false }
-  if (!templates.length) return { score: 1, faceFound: true } // nothing enrolled: never trap anyone
+  const { box, guessed } = lastFaceBox()
+  if (!live) return { score: 0, faceFound: false, box: null, guessed: true }
+  if (!templates.length) return { score: 1, faceFound: true, box, guessed }
   let best = 0
   for (const t of templates) best = Math.max(best, cosineSim(t, live))
-  return { score: best, faceFound: true }
+  return { score: best, faceFound: !guessed, box, guessed }
 }
 
 /** Kept for callers that only want the number. */

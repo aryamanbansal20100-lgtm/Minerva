@@ -26,7 +26,19 @@ export type LockMethod = "none" | "pin" | "fingerprint" | "face"
 const METHOD_KEY = "minerva.lock.method"
 const CRED_KEY = "minerva.lock.credential" // fingerprint: base64 credential id
 const FACE_KEY = "minerva.lock.faceprint" // face: enrolled template (mirrors faceLock)
-const SESSION_KEY = "minerva.lock.passed" // set once unlocked this session
+// Whether a lock is required lives in localStorage so a reload knows to lock
+// straight away, with no flash of the app before the server confirms it.
+const ACCOUNT_CACHE = "minerva.lock.accountRequired"
+
+/* Whether the lock has been passed THIS PAGE LOAD.
+
+   Deliberately a plain variable, not sessionStorage: sessionStorage survives a
+   refresh, which meant a reload kept you inside a locked app — the whole point
+   of a lock defeated by pressing F5. An in-memory flag resets on every full
+   load, so a refresh (and a browser reload after the laptop wakes) always shows
+   the lock again. It still survives tab and app switches, because those do not
+   reload the page — which is exactly the line we want. */
+let passedThisLoad = false
 
 /* ---------------------------------------------------------------- helpers */
 
@@ -85,27 +97,45 @@ function clearDeviceMethods() {
   del(FACE_KEY)
 }
 
-/** Clear this session's pass and reload, so the lock screen appears now — the
-    "Lock now / test it" button in Settings. */
+/** Drop the pass and reload, so the lock screen appears now — the "Lock now /
+    test it" button in Settings. A reload alone would re-lock (the pass is not
+    persisted), but reloading also re-reads the freshly-chosen method. */
 export function relock() {
-  try {
-    sessionStorage.removeItem(SESSION_KEY)
-  } catch {
-    /* nothing */
-  }
+  passedThisLoad = false
   location.reload()
 }
 
 /* ------------------------------------------------- account lock (the PIN) */
 
+/** Was a lock required as of this device's last successful check? Read straight
+    from localStorage so a reload can lock instantly, before the server answers —
+    no flash of the app for a split second on a locked account. */
+export function accountLockCached(): boolean {
+  try {
+    return localStorage.getItem(ACCOUNT_CACHE) === "1"
+  } catch {
+    return false
+  }
+}
+
 /** Does this ACCOUNT require a lock? True on every device once a PIN is set.
-    Server-owned, so it follows the student across devices. */
+    Server-owned, so it follows the student across devices. The answer is cached
+    so the next reload locks without waiting; if the check itself fails (offline),
+    we fall back to that cache rather than unlocking — a dropped network must
+    never be a way past the lock. */
 export async function accountLockRequired(): Promise<boolean> {
   try {
     const r = await apiGet<{ required?: boolean }>("/api/lock")
-    return !!r.required
+    const req = !!r.required
+    try {
+      if (req) localStorage.setItem(ACCOUNT_CACHE, "1")
+      else localStorage.removeItem(ACCOUNT_CACHE)
+    } catch {
+      /* private mode: the in-memory result still drives this load */
+    }
+    return req
   } catch {
-    return false // never trap the student behind a failed check
+    return accountLockCached() // offline: trust what we last knew
   }
 }
 
@@ -118,6 +148,11 @@ export async function setAccountPin(pin: string): Promise<void> {
   await apiPost("/api/lock/set", { pin: clean })
   clearDeviceMethods()
   set(METHOD_KEY, "pin")
+  try {
+    localStorage.setItem(ACCOUNT_CACHE, "1") // a reload now locks immediately
+  } catch {
+    /* nothing */
+  }
   markPassed()
 }
 
@@ -138,33 +173,33 @@ export async function checkAccountPin(pin: string): Promise<boolean> {
 /** Turn the whole account lock off, everywhere. */
 export async function clearAccountLock(): Promise<void> {
   await apiPost("/api/lock/off", {})
+  try {
+    localStorage.removeItem(ACCOUNT_CACHE) // so a reload does not re-lock
+  } catch {
+    /* nothing */
+  }
   disableLock() // also clear this device's fast method
 }
 
+/** Has the lock been passed on THIS page load? Resets on every reload. */
 export function lockPassedThisSession(): boolean {
-  try {
-    return sessionStorage.getItem(SESSION_KEY) === "1"
-  } catch {
-    return false
-  }
+  return passedThisLoad
 }
 
 export function markPassed() {
-  try {
-    sessionStorage.setItem(SESSION_KEY, "1")
-  } catch {
-    /* private mode: it simply asks again, which is safe */
-  }
+  passedThisLoad = true
+}
+
+/** Drop the pass, so the lock screen returns without a reload — used by the
+    sleep detector when the machine has been asleep. */
+export function clearPassed() {
+  passedThisLoad = false
 }
 
 /** Turn every lock off on this device. The escape hatch, and the "Off" choice. */
 export function disableLock() {
   clearDeviceMethods()
-  try {
-    sessionStorage.removeItem(SESSION_KEY)
-  } catch {
-    /* nothing */
-  }
+  passedThisLoad = false
 }
 
 /* ---------------------------------------------------------------- fingerprint */

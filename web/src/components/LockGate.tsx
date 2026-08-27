@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 import {
+  accountLockCached,
   accountLockRequired,
   checkAccountPin,
+  clearPassed,
   disableLock,
   lockMethod,
   lockPassedThisSession,
@@ -30,8 +32,11 @@ export default function LockGate({ children }: { children: React.ReactNode }) {
   const { signOut } = useAuth()
   const device = lockMethod() // "face" | "fingerprint" | "none" on THIS device
   const [required, setRequired] = useState<boolean | null>(
-    // Optimistic: if this device has a fast method, we already know it locks.
-    device !== "none" ? true : null,
+    // Lock straight away, before the server answers, whenever we already know a
+    // lock applies: a fast method is set on this device, or the last check said
+    // the account requires one. This is what makes a refresh re-lock instantly
+    // with no flash of the app in between.
+    device !== "none" || accountLockCached() ? true : null,
   )
   const [passed, setPassed] = useState(lockPassedThisSession())
   const [usePin, setUsePin] = useState(false)
@@ -45,7 +50,11 @@ export default function LockGate({ children }: { children: React.ReactNode }) {
     let live = true
     accountLockRequired().then((req) => {
       if (!live) return
-      setRequired((prev) => prev || req)
+      // A fast method on this device always locks it. Otherwise the account's
+      // answer is authoritative — so turning the lock off on another device
+      // unlocks here on the next check, rather than stranding the student at a
+      // PIN screen for a PIN that no longer exists.
+      setRequired(device !== "none" ? true : req)
       // A device with no fast method but an account PIN goes straight to PIN.
       if (req && device === "none") setUsePin(true)
     })
@@ -100,11 +109,7 @@ export default function LockGate({ children }: { children: React.ReactNode }) {
     // Only meaningful once something actually locks this app.
     if (required !== true && device === "none") return
     const relock = () => {
-      try {
-        sessionStorage.removeItem("minerva.lock.passed")
-      } catch {
-        /* nothing */
-      }
+      clearPassed()
       setPassed(false)
       setUsePin(device === "none")
       setPin("")
@@ -132,6 +137,11 @@ export default function LockGate({ children }: { children: React.ReactNode }) {
       document.removeEventListener("visibilitychange", onVisible)
     }
   }, [required, device])
+
+  // When the lock screen leaves the tree — which happens on sign-out — drop the
+  // pass, so signing back in (as anyone) starts locked rather than inheriting
+  // the last person's unlock.
+  useEffect(() => () => clearPassed(), [])
 
   // Fingerprint prompts itself once when it's the shown method.
   useEffect(() => {

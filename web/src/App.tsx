@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { cn } from "@/lib/utils"
 import { api } from "@/lib/api"
 import { useAuth, identityOf } from "@/lib/auth"
@@ -138,9 +138,20 @@ export default function App() {
     }
   }, [])
 
+  /* The whole shell — the sidebar counts, the Due badge, the nudge, the notes
+     list — is driven by this one call, so refreshing it often is what makes the
+     app feel live instead of stale until you reload. We only push new state into
+     React when it has ACTUALLY changed (compared as JSON), so a poll every few
+     seconds costs a fetch but never a needless re-render or a flicker. */
+  const lastStateJson = useRef("")
   const refresh = useCallback(async () => {
     try {
-      setState(await api.get<State>("/api/state"))
+      const next = await api.get<State>("/api/state")
+      const json = JSON.stringify(next)
+      if (json !== lastStateJson.current) {
+        lastStateJson.current = json
+        setState(next)
+      }
     } catch {
       /* a 401 is handled by the sign-in gate; anything else the pages surface */
     }
@@ -159,9 +170,12 @@ export default function App() {
     let timer: ReturnType<typeof setInterval> | null = null
     const start = () => {
       if (timer) return
+      // Every few seconds while the tab is in front, so a change made here or on
+      // another device shows up on its own — no manual refresh. Paused the moment
+      // the tab is hidden, so a backgrounded tab is not polling for nothing.
       timer = setInterval(() => {
         if (document.visibilityState === "visible") refresh()
-      }, 60000)
+      }, 5000)
     }
     const stop = () => {
       if (timer) clearInterval(timer)
@@ -179,10 +193,13 @@ export default function App() {
     start()
     document.addEventListener("visibilitychange", onVisible)
     window.addEventListener("focus", onVisible)
+    // Coming back online is the other moment stale data needs catching up.
+    window.addEventListener("online", onVisible)
     return () => {
       stop()
       document.removeEventListener("visibilitychange", onVisible)
       window.removeEventListener("focus", onVisible)
+      window.removeEventListener("online", onVisible)
     }
   }, [refresh])
 

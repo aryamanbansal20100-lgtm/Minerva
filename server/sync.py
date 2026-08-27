@@ -184,13 +184,14 @@ def pull_if_new() -> dict:
         return {"pulled": False, "reason": "device already has data; merging"}
 
     remote = cloud.get_profile(uid)
-    if not remote:
-        return {"pulled": False, "reason": "nothing in the cloud yet"}
-
-    store.save_profile({k: remote.get(k) for k in (
-        "name", "curriculum", "grade", "school", "city", "country",
-        "subjects", "timetable", "managebac_ics", "onboarded",
-        "groq_key", "tuition_subjects", "lock_pin") if k in remote})
+    # Restore the profile when it is there, but do NOT bail if it isn't: a
+    # transient hiccup fetching the profile must not also abandon the notes,
+    # tasks and settings sitting in the cloud right beside it.
+    if remote:
+        store.save_profile({k: remote.get(k) for k in (
+            "name", "curriculum", "grade", "school", "city", "country",
+            "subjects", "timetable", "managebac_ics", "onboarded",
+            "groq_key", "tuition_subjects", "lock_pin") if k in remote})
 
     notes = cloud.fetch(uid, "notes")
     for n in notes:
@@ -280,12 +281,33 @@ def pull_all() -> dict:
     for row in cloud.fetch(uid, "shares"):
         shares.restore_from_cloud(uid, row)
 
+    # Settings self-heal: bring back anything the cloud has that this device is
+    # missing — the API key, tuition subjects, the lock PIN, the timetable — not
+    # just on a blank device but any time a field is empty here. This is what
+    # stops the free host's disk wipe from resetting settings while the notes
+    # survive. It only ever FILLS a gap, never overwrites a local value, so a
+    # change made on this device always wins.
     profile = cloud.get_profile(uid)
-    if profile and not store.get_profile().get("onboarded"):
-        store.save_profile({k: profile.get(k) for k in (
-            "name", "curriculum", "grade", "school", "city", "country",
-            "subjects", "timetable", "managebac_ics", "onboarded",
-            "groq_key", "tuition_subjects", "lock_pin") if k in profile})
+    if profile:
+        local = store.get_profile()
+        patch: dict = {}
+        for k in ("name", "curriculum", "grade", "school", "city", "country",
+                  "managebac_ics"):
+            if profile.get(k) and not (local.get(k) or "").strip():
+                patch[k] = profile[k]
+        for k in ("subjects", "timetable", "tuition_subjects"):
+            if profile.get(k) and not local.get(k):
+                patch[k] = profile[k]
+        # Secrets are stripped from get_profile, so read them with their own
+        # getters to decide whether this device is missing them.
+        if profile.get("groq_key") and not store.groq_key():
+            patch["groq_key"] = profile["groq_key"]
+        if profile.get("lock_pin") and not store.get_profile_raw_lock():
+            patch["lock_pin"] = profile["lock_pin"]
+        if profile.get("onboarded") and not local.get("onboarded"):
+            patch["onboarded"] = True
+        if patch:
+            store.save_profile(patch)
 
     total = sum(added.values())
     return {"ok": True, **added, "already_had": skipped,

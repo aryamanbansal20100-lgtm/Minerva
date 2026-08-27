@@ -20,9 +20,10 @@
    a shared desktop" lock the student asked for, done in a way that works on a
    plain webcam. */
 
+import { markPassed } from "@/lib/applock"
+
 const FACE_KEY = "minerva.lock.faceprint" // JSON: the enrolled template
 const METHOD_KEY = "minerva.lock.method"
-const SESSION_KEY = "minerva.lock.passed"
 
 const SIZE = 48 // faceprint is SIZE x SIZE grayscale
 // Multiple poses are enrolled and unlock matches the CLOSEST one, so a slight
@@ -169,10 +170,10 @@ export async function enrollFace(
     localStorage.setItem(FACE_KEY, JSON.stringify(poses))
     localStorage.setItem(METHOD_KEY, "face")
     localStorage.removeItem("minerva.lock.credential") // face is the one method now
-    sessionStorage.setItem(SESSION_KEY, "1") // just enrolled; do not lock out
   } catch {
     throw new Error("Could not save Face unlock on this device.")
   }
+  markPassed() // just enrolled on this load; do not immediately lock out
 }
 
 /** The enrolled poses as Float32 vectors. Handles the old single-template

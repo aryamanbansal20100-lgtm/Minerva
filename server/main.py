@@ -10,6 +10,7 @@ import json
 import mimetypes
 import os
 import re
+import time
 import traceback
 import urllib.error
 import urllib.parse
@@ -52,6 +53,11 @@ KEEP_ORIGINAL_MAX = 25 * 1024 * 1024
 
 # Where partial uploads accumulate while they arrive.
 UPLOAD_TMP = ROOT / "data" / "uploads"
+
+# uid -> (consecutive failures, unix time the account may try again).
+# In memory on purpose: a restart forgiving a lockout is fine, and it
+# keeps a brute-force counter out of the student's synced profile.
+_PIN_FAILS: dict[str, tuple[int, float]] = {}
 
 
 # ---------------------------------------------------------------------------
@@ -182,6 +188,132 @@ def _plain_reason(detail: str) -> str:
     return "the AI service did not answer."
 
 
+def _norm(s) -> str:
+    """A comparison key: case, spacing and trailing punctuation removed, so
+    "PES > 1." and "pes > 1" are recognised as the same thing."""
+    return re.sub(r"[\s.;:,]+", " ", str(s or "")).strip().lower()
+
+
+def _merge_blocks(previous: list, incoming: list) -> list:
+    """Fold a new lesson into an existing note, in place rather than after it.
+
+    Recording a second or third time into one note should leave ONE note that
+    reads as though it were written in a single sitting — not the same note
+    stacked three times. Two things have to be true at once, and neither can be
+    entrusted to the model:
+
+      NOTHING IS EVER LOST. Every block that was already there survives, so
+        pressing Record can never delete a lesson. That was the bug that wiped a
+        term of work: the composed result simply replaced whatever was there.
+
+      NOTHING IS SAID TWICE. Definitions collect into one list keyed by term,
+        points merge into the section that already carries that heading, and
+        formulas, examples and diagrams are matched on their content, so a
+        repeated definition or a re-drawn graph lands once.
+
+    Order follows the note as it already reads: existing sections keep their
+    place and absorb new material, and anything genuinely new is appended in the
+    order the new lesson taught it. Because every merge is keyed on content, a
+    model that DID merge correctly and one that ignored the previous note both
+    produce the same tidy result — running it twice changes nothing.
+    """
+    out: list = []
+    points_at: dict = {}      # heading key -> index in `out`
+    single_at: dict = {}      # "definitions"/"assessed"/"gaps" -> index in `out`
+    seen: set = set()         # content keys for formula / example / diagram
+    summary_at = -1
+
+    def item_keys(items) -> set:
+        return {_norm(i) for i in (items or []) if _norm(i)}
+
+    def absorb(block: dict) -> None:
+        nonlocal summary_at
+        if not isinstance(block, dict):
+            return
+        kind = block.get("type")
+
+        if kind == "summary":
+            # One summary, and the fuller of the two wins.
+            text = str(block.get("text") or "")
+            if summary_at < 0:
+                summary_at = len(out)
+                out.append({"type": "summary", "text": text})
+            elif len(text) > len(out[summary_at].get("text") or ""):
+                out[summary_at]["text"] = text
+            return
+
+        if kind == "points":
+            key = _norm(block.get("heading")) or "_"
+            items = [i for i in (block.get("items") or []) if str(i).strip()]
+            if key in points_at:
+                target = out[points_at[key]]
+                have = item_keys(target.get("items"))
+                for i in items:
+                    if _norm(i) not in have:
+                        target.setdefault("items", []).append(i)
+                        have.add(_norm(i))
+            else:
+                points_at[key] = len(out)
+                out.append({"type": "points",
+                            "heading": block.get("heading") or "",
+                            "items": list(items)})
+            return
+
+        if kind in ("definitions",):
+            rows = [d for d in (block.get("items") or []) if isinstance(d, dict)]
+            if kind in single_at:
+                target = out[single_at[kind]]
+                have = {_norm(d.get("term")) for d in target.get("items") or []}
+                for d in rows:
+                    if _norm(d.get("term")) not in have:
+                        target.setdefault("items", []).append(d)
+                        have.add(_norm(d.get("term")))
+            else:
+                single_at[kind] = len(out)
+                out.append({"type": kind, "items": list(rows)})
+            return
+
+        if kind in ("assessed", "gaps"):
+            items = [i for i in (block.get("items") or []) if str(i).strip()]
+            if kind in single_at:
+                target = out[single_at[kind]]
+                have = item_keys(target.get("items"))
+                for i in items:
+                    if _norm(i) not in have:
+                        target.setdefault("items", []).append(i)
+                        have.add(_norm(i))
+            else:
+                single_at[kind] = len(out)
+                out.append({"type": kind, "items": list(items)})
+            return
+
+        # formula / example / diagram: keep each distinct one, once.
+        if kind == "formula":
+            key = ("formula", _norm(block.get("formula")))
+        elif kind == "example":
+            key = ("example", _norm(block.get("title"))
+                   + "|" + _norm(" ".join(str(s) for s in block.get("steps") or [])))
+        elif kind == "diagram":
+            spec = block.get("spec") or {}
+            key = ("diagram", _norm(spec.get("kind")) + "|" + _norm(spec.get("title")))
+        else:
+            key = (str(kind), _norm(json.dumps(block, default=str, sort_keys=True)))
+        if key in seen:
+            return
+        seen.add(key)
+        out.append(block)
+
+    for b in previous:
+        absorb(b)
+    for b in incoming:
+        absorb(b)
+
+    # The one-line summary belongs at the top of the note.
+    if summary_at > 0:
+        out.insert(0, out.pop(summary_at))
+    return out
+
+
 def _apply_composition(note: dict, composed: dict, transcript: str = "") -> dict:
     blocks = composed.get("blocks") or []
     if composed.get("summary"):
@@ -220,6 +352,12 @@ def _apply_composition(note: dict, composed: dict, transcript: str = "") -> dict
             kind=t.get("kind", "homework"), source="note",
             source_ref=f"{note['id']}:{what[:40]}", note_id=note["id"])
         tasks.append(row)
+
+    # Recording a second lesson into a note MERGES it, and can never shrink it.
+    # Done in code, not left to the model: a model that ignored the previous note
+    # used to destroy a term of work, and a model that half-merged used to leave
+    # the same definition three times.
+    blocks = _merge_blocks(note.get("blocks") or [], blocks)
 
     patch = {"blocks": blocks, "continues": bool(composed.get("continues"))}
     if composed.get("title") and note.get("title") in ("", "Untitled", None):
@@ -894,7 +1032,33 @@ class Handler(SimpleHTTPRequestHandler):
         if path == "/api/lock/check":
             # Verify a PIN entered on the lock screen. The hash never leaves the
             # server, so a device that has never enrolled can still be unlocked.
-            return self._json({"ok": store.check_lock_pin(str(payload.get("pin") or ""))})
+            #
+            # Rate limited, because a four-digit PIN is only ten thousand guesses
+            # and a script can try them all in a minute. Checking is free without
+            # this, which would make the lock decorative. Delay grows with the
+            # number of recent failures and the account stops answering entirely
+            # for a while after enough of them; a correct PIN clears the record.
+            who = store.uid()
+            now = time.time()
+            fails, until = _PIN_FAILS.get(who, (0, 0.0))
+            if now < until:
+                return self._json(
+                    {"ok": False,
+                     "error": "Too many wrong PINs. Wait %d seconds, or sign out "
+                              "and back in." % int(until - now)}, 429)
+            ok = store.check_lock_pin(str(payload.get("pin") or ""))
+            if ok:
+                _PIN_FAILS.pop(who, None)
+            else:
+                fails += 1
+                # 5 free tries (fat fingers), then a hard, growing pause.
+                wait = 0 if fails < 5 else min(300, 5 * (2 ** (fails - 5)))
+                _PIN_FAILS[who] = (fails, now + wait)
+                if wait:
+                    return self._json(
+                        {"ok": False,
+                         "error": "Too many wrong PINs. Wait %d seconds." % wait}, 429)
+            return self._json({"ok": ok})
 
         if path == "/api/lock/off":
             store.clear_lock()

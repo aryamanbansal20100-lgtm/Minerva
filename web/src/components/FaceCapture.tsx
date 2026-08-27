@@ -3,8 +3,8 @@ import {
   enrollFace,
   matchThreshold,
   openCamera,
+  readFace,
   stopCamera,
-  verifyFaceScore,
 } from "@/lib/faceLock"
 
 /* The webcam view, used two ways, both with a live ring so it never feels like
@@ -71,7 +71,7 @@ export default function FaceCapture({
     setBusy(true)
     setError("")
     setProgress(0)
-    setHint("Slowly turn your head left, then right…")
+    setHint("Turn your head slowly left and right — then lean in a little, and back.")
     try {
       await enrollFace(videoRef.current, (f) => setProgress(f))
       setHint("Got it!")
@@ -85,26 +85,48 @@ export default function FaceCapture({
     }
   }, [onSuccess])
 
-  // Verify: poll fast, show the live match on the ring, unlock at the threshold.
+  /* Verify: poll fast, show the live match on the ring, unlock at the threshold.
+
+     Two frames in a row must clear the bar before it opens. A single frame can
+     spike on a blur or an odd angle, and one lucky frame should not be the whole
+     security check — two consecutive readings cost about a fifth of a second and
+     remove that entirely. The hint distinguishes "I cannot see a face" from
+     "I can see one but it isn't you", which is the difference between the
+     student adjusting the laptop and giving up. */
   useEffect(() => {
     if (mode !== "verify" || !ready) return
     let alive = true
+    let streak = 0
     const th = matchThreshold()
     const tick = () => {
       if (!alive || !videoRef.current) return
-      const score = verifyFaceScore(videoRef.current)
-      // Map the score into a 0..1 ring: full when it reaches the threshold.
-      setProgress(Math.max(0, Math.min(1, score / th)))
-      if (score >= th) {
-        onSuccess()
+      const { score, faceFound } = readFace(videoRef.current)
+
+      if (!faceFound) {
+        streak = 0
+        setProgress(0)
+        setHint("Move into the frame — make sure your face is lit from the front.")
+        window.setTimeout(tick, 160)
         return
       }
-      setHint(
-        score > th - 0.06
-          ? "Almost — hold still…"
-          : "Line your face up with the circle…",
-      )
-      window.setTimeout(tick, 140)
+
+      setProgress(Math.max(0, Math.min(1, score / th)))
+      if (score >= th) {
+        streak += 1
+        if (streak >= 2) {
+          onSuccess()
+          return
+        }
+        setHint("Hold still…")
+      } else {
+        streak = 0
+        setHint(
+          score > th - 0.08
+            ? "Almost — hold still…"
+            : "Line your face up with the circle…",
+        )
+      }
+      window.setTimeout(tick, 160)
     }
     const id = window.setTimeout(tick, 400) // let the camera settle first
     return () => {

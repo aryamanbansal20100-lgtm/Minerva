@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react"
+import { useCallback, useEffect, useState } from "react"
 import {
   accountLockCached,
   accountLockRequired,
@@ -11,6 +11,7 @@ import {
   unlockFingerprint,
 } from "@/lib/applock"
 import { useAuth } from "@/lib/auth"
+import { watchForSleep } from "@/lib/sleepwatch"
 import MinervaMark from "@/components/MinervaMark"
 import FaceCapture from "@/components/FaceCapture"
 
@@ -63,7 +64,12 @@ export default function LockGate({ children }: { children: React.ReactNode }) {
     }
   }, [device])
 
-  const locked = required === true && !passed
+  /* FAIL CLOSED. `required` is null until the server answers, and treating that
+     unknown as "not locked" is what let anyone open /#/settings — or any route —
+     and see the whole app while the check was still in flight, or for ever if the
+     check failed. An unknown answer is now treated as locked: nothing below this
+     gate renders until the server has actually said there is no lock. */
+  const locked = required !== false && !passed
   const showFace = device === "face" && !usePin
   const showFingerprint = device === "fingerprint" && !usePin
 
@@ -95,47 +101,24 @@ export default function LockGate({ children }: { children: React.ReactNode }) {
     }
   }, [pin])
 
-  /* Re-lock after the machine sleeps, but never on a tab/app switch.
+  /* Re-lock after the machine sleeps, but never on a tab or app switch.
 
-     The tell is simple: while the computer is awake a heartbeat keeps ticking
-     even on a hidden tab, so switching away and back leaves only a small gap and
-     nothing happens. When the machine SLEEPS, JavaScript stops entirely, so on
-     wake the gap since the last tick is large -- that is when the lock comes
-     back. A 90-second grace means a quick glance at another tab is never enough
-     to trip it. */
-  const lastTick = useRef(Date.now())
-  const GRACE_MS = 90_000
+     The detection lives in sleepwatch.ts, which distinguishes the two properly:
+     a suspend makes the wall clock and the monotonic clock disagree, while a
+     backgrounded tab merely gets its timers throttled and both clocks advance
+     together. Switching tabs therefore costs nothing, and closing the lid — even
+     for half a minute, even when waking fires no events at all — brings the lock
+     straight back. */
   useEffect(() => {
     // Only meaningful once something actually locks this app.
     if (required !== true && device === "none") return
-    const relock = () => {
+    return watchForSleep(() => {
       clearPassed()
       setPassed(false)
       setUsePin(device === "none")
       setPin("")
       setError("")
-    }
-    const check = () => {
-      const now = Date.now()
-      if (now - lastTick.current > GRACE_MS) relock()
-      lastTick.current = now
-    }
-    // A heartbeat that keeps running while the machine is awake (even hidden,
-    // just throttled) but stops dead during sleep.
-    const beat = window.setInterval(check, 20_000)
-    // And check the instant the window is looked at again, so waking from sleep
-    // re-locks immediately rather than up to 20s later.
-    const onFocus = () => check()
-    const onVisible = () => {
-      if (document.visibilityState === "visible") check()
-    }
-    window.addEventListener("focus", onFocus)
-    document.addEventListener("visibilitychange", onVisible)
-    return () => {
-      window.clearInterval(beat)
-      window.removeEventListener("focus", onFocus)
-      document.removeEventListener("visibilitychange", onVisible)
-    }
+    })
   }, [required, device])
 
   // When the lock screen leaves the tree — which happens on sign-out — drop the
@@ -150,6 +133,20 @@ export default function LockGate({ children }: { children: React.ReactNode }) {
   }, [locked, showFingerprint])
 
   if (!locked) return <>{children}</>
+
+  /* Still waiting on the server. Neither the app (that is the hole we just
+     closed) nor a PIN box (wrong, and alarming, for an account with no lock) —
+     just a quiet holding screen for the moment it takes to find out. */
+  if (required === null) {
+    return (
+      <div className="fixed inset-0 z-[90] grid place-items-center bg-background text-foreground">
+        <div className="flex items-center gap-2.5">
+          <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-brand" />
+          <span className="font-mono text-[13px] text-muted-foreground">Checking…</span>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="fixed inset-0 z-[90] grid place-items-center bg-background px-6 text-foreground">

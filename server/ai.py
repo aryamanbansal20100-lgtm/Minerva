@@ -261,7 +261,80 @@ def gemini_ready() -> bool:
     return bool(config.env("GEMINI_API_KEY"))
 
 
-def gemini_json(system: str, user: str, max_tokens: int = 16384) -> dict | None:
+def _salvage_json(text: str) -> dict | None:
+    """Rescue a note whose JSON was cut off mid-sentence.
+
+    A long lesson can run past the output ceiling, and the reply then ends in the
+    middle of a string. json.loads rejects the whole thing, so a nearly complete
+    set of notes — twenty good sections and one half-written one — was thrown
+    away and the student got the raw-bullet fallback instead. This walks the text
+    with a bracket counter, cuts it back to the last element that finished
+    cleanly, closes whatever is still open, and parses that. Losing the final
+    half-section is a far better outcome than losing the lesson.
+    """
+    start = text.find("{")
+    if start < 0:
+        return None
+    depth = 0
+    in_str = False
+    esc = False
+    last_good = -1
+    stack: list[str] = []
+    for i in range(start, len(text)):
+        ch = text[i]
+        if in_str:
+            if esc:
+                esc = False
+            elif ch == "\\":
+                esc = True
+            elif ch == '"':
+                in_str = False
+            continue
+        if ch == '"':
+            in_str = True
+        elif ch in "{[":
+            stack.append("}" if ch == "{" else "]")
+            depth += 1
+        elif ch in "}]":
+            if stack:
+                stack.pop()
+            depth -= 1
+            if depth == 0:
+                return None          # it closed properly; not a truncation case
+        elif ch == "," and depth <= 2:
+            last_good = i            # end of a complete top-level-ish element
+    if last_good < 0:
+        return None
+    # Re-derive what is still open at the cut point, then close it.
+    trimmed = text[start:last_good]
+    depth = 0
+    in_str = False
+    esc = False
+    stack = []
+    for ch in trimmed:
+        if in_str:
+            if esc:
+                esc = False
+            elif ch == "\\":
+                esc = True
+            elif ch == '"':
+                in_str = False
+            continue
+        if ch == '"':
+            in_str = True
+        elif ch in "{[":
+            stack.append("}" if ch == "{" else "]")
+        elif ch in "}]":
+            if stack:
+                stack.pop()
+    try:
+        parsed = json.loads(trimmed + "".join(reversed(stack)))
+        return parsed if isinstance(parsed, dict) else None
+    except ValueError:
+        return None
+
+
+def gemini_json(system: str, user: str, max_tokens: int = 32768) -> dict | None:
     """Write with Gemini instead of Groq.
 
     Groq's free tier allows 8,000 tokens PER MINUTE across prompt and
@@ -279,31 +352,45 @@ def gemini_json(system: str, user: str, max_tokens: int = 16384) -> dict | None:
     payload = {
         "system_instruction": {"parts": [{"text": system}]},
         "contents": [{"role": "user", "parts": [{"text": user}]}],
-        "generationConfig": {"temperature": 0.2, "maxOutputTokens": max_tokens,
-                             "responseMimeType": "application/json"},
+        # THINKING OFF. This one line is why notes were slow AND short.
+        #
+        # The current Gemini flash models think before answering, and those
+        # thoughts are billed against maxOutputTokens. Writing a lesson's notes
+        # is a long structured answer, so the model would spend most of the
+        # budget reasoning, hit the ceiling, and return content that was empty or
+        # cut off mid-JSON. That failed to parse, so the call was retried, the
+        # two-minute deadline ran out, and the whole thing dropped to Groq, which
+        # can only take 1,600 words at a time in 3,000-token slices -- or to the
+        # raw-bullet fallback. Every symptom followed from here: a long wait, a
+        # note a fifth of the right length, and almost no diagrams, because
+        # diagrams are the first thing a squeezed budget drops.
+        #
+        # Writing these notes is transcription and structuring, not reasoning:
+        # the lesson already contains the content. Turning thinking off hands the
+        # entire budget to the answer, which is where it belongs.
+        "generationConfig": net.no_thinking({
+            "temperature": 0.2,
+            "maxOutputTokens": max_tokens,
+            "responseMimeType": "application/json",
+        }),
     }
     # This runs INSIDE the student's request while they watch a spinner, so it
     # must be bounded. The old loop was 4 rounds x 4 models = 16 tries at a
     # 180-second timeout each -- worst case over half an hour of hanging before
     # anything fell back. A note that has not come back in ~two minutes is not
     # coming; give up and let Groq write it.
+    import threading
     import time
 
     started = time.monotonic()
-    DEADLINE = 120.0        # total seconds Gemini may take before we fall back
-    PER_TRY = 75            # a big note genuinely takes ~40-55s; allow headroom
+    DEADLINE = 100.0        # total seconds to wait for ANY model
+    PER_TRY = 90            # one model's own ceiling
 
     order = ([_gemini_model] if _gemini_model else []) + GEMINI_MODELS
-    models = list(dict.fromkeys(x for x in order if x))
-    # Two passes at most: the second only rescues a transient 503 or blip.
-    plan = [(m, rnd) for rnd in range(2) for m in models]
-    for name, rnd in plan:
-        if name not in models:
-            continue                          # dropped after a 4xx this call
-        if time.monotonic() - started > DEADLINE:
-            break                             # out of time -> Groq fallback
-        if rnd:
-            time.sleep(3)
+    models = list(dict.fromkeys(x for x in order if x))[:3]
+
+    def ask(name: str, sink: dict, done: threading.Event) -> None:
+        """One model's attempt. Writes into `sink` only if it wins the race."""
         req = urllib.request.Request(
             GEMINI_URL.format(model=name, key=key),
             data=json.dumps(payload).encode("utf-8"), method="POST",
@@ -313,26 +400,47 @@ def gemini_json(system: str, user: str, max_tokens: int = 16384) -> dict | None:
                 out = json.loads(resp.read().decode("utf-8"))
             text = net.gemini_text(out)
             start, end = text.find("{"), text.rfind("}")
-            parsed = json.loads(text[start:end + 1])
-            _gemini_model = name
-            return parsed if isinstance(parsed, dict) else None
+            try:
+                parsed = json.loads(text[start:end + 1])
+            except ValueError:
+                # Ran past the ceiling mid-note. Keep the sections that did
+                # finish rather than discarding the whole lesson.
+                parsed = _salvage_json(text)
+                if parsed is None:
+                    raise
+            if isinstance(parsed, dict) and not done.is_set():
+                sink["model"] = name
+                sink["data"] = parsed
+                done.set()
         except urllib.error.HTTPError as exc:
-            _last_error = (f"gemini {name} {exc.code}: "
-                           + exc.read()[:150].decode("utf-8", "replace"))
-            if exc.code in (400, 404):
-                if name in models:
-                    models.remove(name)                   # dead name, drop it
-            if exc.code == 429:
-                # Daily quota on this model. Drop it for this call and stop
-                # preferring it, so the remaining models get a turn.
-                if name in models:
-                    models.remove(name)
-                if _gemini_model == name:
-                    _gemini_model = ""
-            continue
+            body = exc.read()[:150].decode("utf-8", "replace")
+            sink.setdefault("errors", []).append(f"{name} {exc.code}: {body}")
         except Exception as exc:
-            _last_error = f"gemini {name}: {type(exc).__name__} {exc}"[:200]
-            continue
+            sink.setdefault("errors", []).append(
+                f"{name}: {type(exc).__name__} {exc}"[:160])
+
+    # Race the models instead of queueing behind them.
+    #
+    # Sequentially, one model timing out at 90 seconds and the next answering
+    # 503 meant the student waited nearly two minutes to be told nothing --
+    # before the fallback even started. The free tiers fail independently and
+    # unpredictably: whichever is healthy right now is the one that should
+    # answer, and there is no way to know which that is without asking. So ask
+    # them all at once and take the first complete note. The cost is a couple of
+    # extra requests against a free quota; the saving is most of the wait.
+    sink: dict = {}
+    done = threading.Event()
+    threads = [threading.Thread(target=ask, args=(m, sink, done), daemon=True)
+               for m in models]
+    for t in threads:
+        t.start()
+    done.wait(timeout=max(1.0, DEADLINE - (time.monotonic() - started)))
+
+    if sink.get("data") is not None:
+        _gemini_model = sink.get("model") or _gemini_model
+        return sink["data"]
+    errs = sink.get("errors") or []
+    _last_error = ("gemini: " + "; ".join(errs)[:200]) if errs else "gemini: no reply in time"
     return None
 
 
@@ -1376,6 +1484,36 @@ is visibly shorter than the input deserves, you have failed.
 
 JSON shape:
 {{"title":str,"summary":str,"blocks":[...],"tasks":[...],"diagrams":[...]}}
+
+THE BLOCK TYPES. These are the ONLY types that can be drawn, and every one of
+them is rendered differently and better than a plain bullet. Use the right type
+for the content — a formula written as a bullet loses its formatting, and a
+definition written as a bullet loses the term/meaning layout:
+
+  {{"type":"points","heading":"Determinants of PES","items":["...","..."]}}
+      the workhorse. SEVERAL of these per lesson, following the lesson's order.
+  {{"type":"definitions","items":[{{"term":"Elastic supply","meaning":"PES > 1..."}}]}}
+      REQUIRED whenever the teacher defines terms. Never write a definition as a
+      bullet; a lesson that defines four terms needs them here.
+  {{"type":"formula","formula":"PES = %ΔQs / %ΔP","means":"what it measures",
+    "when":"when to use it"}}
+      REQUIRED for every formula, rule or equation stated. One block per formula.
+  {{"type":"example","title":"Worked example","steps":["Price 10 → 12, so +20%",
+    "Quantity 100 → 150, so +50%","PES = 50 / 20 = 2.5 → elastic"]}}
+      REQUIRED whenever the teacher works a calculation through. Show EVERY
+      arithmetic step exactly as it was done, not just the answer.
+  {{"type":"assessed","items":["..."]}}
+      anything flagged as exam-relevant, plus the traps: "don't confuse PES with
+      PED" belongs here, because that is where marks are actually lost.
+  {{"type":"gaps","items":["..."]}}
+      genuine subject doubts worth asking the teacher next lesson.
+  {{"type":"diagram","spec":{{...}}}}
+      as described above.
+
+USE THE FULL RANGE. A real lesson almost always contains definitions, at least
+one formula or rule, and at least one worked example. A note that comes back as
+nothing but "points" and "diagram" blocks has thrown away most of the structure
+the student needs to revise from, and is wrong.
 
 "diagrams" IS REQUIRED. It is a LIST of diagram specs using the shapes above,
 each with an extra "after" field naming the heading it belongs under, so it can

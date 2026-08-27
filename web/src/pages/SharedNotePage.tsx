@@ -146,7 +146,7 @@ export default function SharedNotePage({
           {note.blocks && note.blocks.length > 0 ? (
             <BlockRenderer blocks={note.blocks as Block[]} />
           ) : note.body ? (
-            <p className="whitespace-pre-wrap font-serif text-[16px] leading-relaxed">{note.body}</p>
+            <p className="whitespace-pre-wrap font-serif text-[17.5px] leading-[1.7]">{note.body}</p>
           ) : (
             <p className="text-[13px] text-muted-foreground">This note has no content yet.</p>
           )}

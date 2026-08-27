@@ -21,13 +21,20 @@
      make this read as something a student opens by choice, not a form. The
      brand is a friendly indigo-violet — energetic without being loud, and it
      carries into buttons, the active nav, focus rings and progress. */
-  --brand: oklch(0.58 0.19 280);
-  --brand-2: oklch(0.62 0.17 320);
-  --brand-soft: oklch(0.96 0.03 285);
-  --brand-ring: oklch(0.7 0.15 285);
+  /* Deepened and de-saturated from the original violet. The old brand was a
+     bright candy purple, which reads as a toy; pulling the chroma down and the
+     lightness with it turns the same hue into ink — calmer to sit beside for an
+     hour, and it stops the app looking like every other AI product. */
+  --brand: oklch(0.52 0.145 276);
+  --brand-2: oklch(0.56 0.135 312);
+  --brand-soft: oklch(0.962 0.022 285);
+  --brand-ring: oklch(0.66 0.13 280);
 
-  --background: oklch(0.992 0.004 300);
-  --foreground: oklch(0.22 0.02 285);
+  /* Not paper-white. A near-white page under a bright classroom light is the
+     main cause of glare in a reading app, so the page sits slightly below white
+     and cards are pure white — which also gives the cards something to lift off. */
+  --background: oklch(0.984 0.004 295);
+  --foreground: oklch(0.245 0.017 285);
 
   --card: oklch(1 0 0);
   --card-foreground: oklch(0.22 0.02 285);
@@ -36,7 +43,7 @@
 
   /* Primary IS the brand now. The old near-black was correct for a dev tool and
      wrong for a student one. */
-  --primary: oklch(0.56 0.19 280);
+  --primary: oklch(0.52 0.145 276);
   --primary-foreground: oklch(0.99 0.01 285);
 
   --secondary: oklch(0.965 0.008 300);
@@ -67,20 +74,23 @@
 .dark {
   /* A hint of violet in the near-black, so dark mode feels lit rather than
      dead, and the brand carries through. */
-  --brand: oklch(0.72 0.16 285);
-  --brand-2: oklch(0.74 0.15 320);
-  --brand-soft: oklch(0.26 0.05 285);
-  --brand-ring: oklch(0.6 0.14 285);
+  --brand: oklch(0.745 0.125 280);
+  --brand-2: oklch(0.765 0.115 315);
+  --brand-soft: oklch(0.265 0.042 282);
+  --brand-ring: oklch(0.63 0.12 280);
 
-  --background: oklch(0.17 0.012 285);
-  --foreground: oklch(0.96 0.004 300);
+  /* Pure-white text on near-black haloes at small sizes and is genuinely tiring
+     to read for long. Dropping the text a little and lifting the page a little
+     keeps contrast well past AA while making an hour of reading comfortable. */
+  --background: oklch(0.178 0.011 282);
+  --foreground: oklch(0.928 0.004 300);
 
-  --card: oklch(0.212 0.014 285);
-  --card-foreground: oklch(0.96 0.004 300);
-  --popover: oklch(0.212 0.014 285);
-  --popover-foreground: oklch(0.96 0.004 300);
+  --card: oklch(0.218 0.013 282);
+  --card-foreground: oklch(0.928 0.004 300);
+  --popover: oklch(0.218 0.013 282);
+  --popover-foreground: oklch(0.928 0.004 300);
 
-  --primary: oklch(0.7 0.16 285);
+  --primary: oklch(0.745 0.125 280);
   --primary-foreground: oklch(0.16 0.02 285);
 
   --secondary: oklch(0.255 0.014 285);
@@ -145,7 +155,15 @@
   --radius-md: var(--radius);
   --radius-lg: calc(var(--radius) + 2px);
 
-  --font-sans: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  /* Four roles, each doing one job.
+
+     serif is the important one and was previously undefined: every note in the
+     app is set in `font-serif`, so the text a student actually reads for an hour
+     was falling back to whatever Georgia the machine happened to have. Crimson
+     Pro is a proper reading face — open counters, low contrast, comfortable at
+     length. sans is the interface only. */
+  --font-sans: "Public Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-serif: "Crimson Pro", Georgia, "Times New Roman", serif;
   --font-mono: "Spline Sans Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
   --font-display: "Fraunces", Georgia, "Times New Roman", serif;
   --font-hand: "Caveat", ui-rounded, cursive;
@@ -164,14 +182,50 @@
     background: var(--background);
     color: var(--foreground);
     font-family: var(--font-sans);
-    font-size: 14px;
-    letter-spacing: -0.006em;
+    /* 14px was too small for an app people read in for an hour. 15px with real
+       line-height is the difference between scanning and reading. */
+    font-size: 15px;
+    line-height: 1.55;
+    letter-spacing: -0.004em;
     -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
   }
-  h1, h2, h3, h4 { letter-spacing: -0.018em; font-weight: 600; }
+  h1, h2, h3, h4 { letter-spacing: -0.018em; font-weight: 600; text-wrap: balance; }
   /* Dates, counts and times line up in columns. */
   table, .tabular { font-variant-numeric: tabular-nums; }
   ::selection { background: color-mix(in oklch, var(--brand) 22%, transparent); }
+
+  /* Anything that acts like a control looks and behaves like one. */
+  button:not(:disabled), [role="button"]:not([aria-disabled="true"]), summary {
+    cursor: pointer;
+  }
+  button:disabled { cursor: not-allowed; }
+
+  /* One visible focus ring everywhere, for keyboard users. Only on
+     :focus-visible, so a mouse click never leaves a ring behind. */
+  :focus-visible {
+    outline: 2px solid var(--brand-ring);
+    outline-offset: 2px;
+    border-radius: var(--radius-sm);
+  }
+
+  /* Respect the system setting rather than animating regardless. */
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}
+
+@layer base {
+  /* Visible to a screen reader, invisible on screen. */
+  .sr-only {
+    position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+    overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0;
+  }
 }
 
 @layer components {
@@ -196,6 +250,122 @@
     background: color-mix(in oklch, var(--brand-soft) 70%, var(--card));
     border: 1px solid color-mix(in oklch, var(--brand) 18%, var(--border));
   }
+
+  /* The reading measure. Crimson Pro sets smaller than a UI sans at the same
+     px, so note text runs a little larger, with the line-height and column
+     width that make long passages comfortable rather than merely legible. */
+  .reading {
+    font-family: var(--font-serif);
+    font-size: 1.125rem;
+    line-height: 1.72;
+    max-width: 68ch;
+    letter-spacing: 0;
+  }
+
+  /* Cards that hold content the student reads, rather than chrome. A hairline
+     border plus a whisper of shadow lifts them off the page without the heavy
+     drop-shadows that make an interface feel plastic. */
+  .sheet {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    box-shadow: 0 1px 2px color-mix(in oklch, var(--foreground) 4%, transparent),
+                0 8px 24px -16px color-mix(in oklch, var(--foreground) 18%, transparent);
+  }
+
+  /* Section eyebrow — small, spaced, quiet. Used above block cards. */
+  .eyebrow {
+    font-size: 0.6875rem;
+    font-weight: 600;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+    color: var(--muted-foreground);
+  }
+}
+
+/* ==========================================================================
+   READING VIEWS.
+
+   Five ways to read the same note, chosen by the student (see lib/viewMode.ts).
+   Every one of them works on the SAME markup the BlockRenderer already emits —
+   the only hooks are `data-block` on each section and the `.note-blocks`
+   wrapper — so no view can break another, and adding a sixth is only CSS.
+   ========================================================================== */
+
+/* ---- Paper: a page from a notebook. Warm ground, no card edges, the labels
+   demoted to small margin notes so the writing itself carries the page. ---- */
+[data-note-view="paper"] .note-blocks { display: flex; flex-direction: column; gap: 0; }
+[data-note-view="paper"] .note-block {
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid color-mix(in oklch, var(--border) 70%, transparent);
+  border-radius: 0;
+  padding: 6px 0 18px;
+}
+[data-note-view="paper"] .note-block:last-child { border-bottom: 0; }
+[data-note-view="paper"] .note-block-label {
+  background: transparent; border: 0; padding: 14px 0 2px;
+}
+[data-note-view="paper"] .note-block-body { padding: 0; }
+[data-note-view="paper"] .note-block-body :is(p, li) { font-family: var(--font-serif); }
+[data-note-view="paper"] .note-block[data-block="summary"] .note-block-body p {
+  font-size: 1.3rem; line-height: 1.6;
+}
+
+/* ---- Focus: one column, large type, chrome stripped. For the night before. -- */
+[data-note-view="focus"] .note-blocks {
+  max-width: 62ch; margin: 0 auto; display: flex; flex-direction: column; gap: 30px;
+}
+[data-note-view="focus"] .note-block {
+  background: transparent; border: 0; border-radius: 0; padding: 0;
+}
+[data-note-view="focus"] .note-block-label {
+  background: transparent; border: 0; padding: 0 0 8px; opacity: .5;
+}
+[data-note-view="focus"] .note-block-body { padding: 0; }
+[data-note-view="focus"] .note-block-body :is(p, li) {
+  font-family: var(--font-serif); font-size: 1.24rem; line-height: 1.78;
+}
+[data-note-view="focus"] .note-block[data-block="diagram"] { opacity: .92; }
+
+/* ---- Workspace: dense and compact. Twice as much on screen. ---- */
+[data-note-view="workspace"] .note-blocks { gap: 8px; }
+[data-note-view="workspace"] .note-block { border-radius: 7px; }
+[data-note-view="workspace"] .note-block-label { padding: 4px 10px; }
+[data-note-view="workspace"] .note-block-label span { font-size: 10px; }
+[data-note-view="workspace"] .note-block-body { padding: 9px 11px; }
+[data-note-view="workspace"] .note-block-body :is(p, li) {
+  font-family: var(--font-sans); font-size: .84rem; line-height: 1.5; max-width: none;
+}
+[data-note-view="workspace"] .note-block-body :is(ul, ol) { margin: 0; }
+
+/* ---- Cards: each section its own card in a grid, for self-testing. ---- */
+[data-note-view="cards"] .note-blocks {
+  display: grid; gap: 12px;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+}
+[data-note-view="cards"] .note-block {
+  border-radius: 14px; margin: 0;
+  box-shadow: 0 1px 2px color-mix(in oklch, var(--foreground) 5%, transparent);
+  transition: transform .18s ease, border-color .18s ease;
+}
+[data-note-view="cards"] .note-block:hover {
+  transform: translateY(-2px);
+  border-color: color-mix(in oklch, var(--brand) 45%, var(--border));
+}
+/* The one-liner and any diagram are worth the full width. */
+[data-note-view="cards"] .note-block[data-block="summary"],
+[data-note-view="cards"] .note-block[data-block="diagram"] { grid-column: 1 / -1; }
+[data-note-view="cards"] .note-block-body :is(p, li) { font-size: .95rem; }
+
+/* ---- Split: notes beside the transcript. The column is set by the page. ---- */
+[data-note-view="split"] .note-blocks { gap: 12px; }
+[data-note-view="split"] .note-block { border-radius: 9px; }
+
+@media (max-width: 720px) {
+  /* On a phone every view collapses to one readable column. */
+  [data-note-view="cards"] .note-blocks { grid-template-columns: 1fr; }
+  [data-note-view="focus"] .note-block-body :is(p, li) { font-size: 1.12rem; }
 }
 
 /* Eight distinct, legible subject hues, keyed by the same index the pages

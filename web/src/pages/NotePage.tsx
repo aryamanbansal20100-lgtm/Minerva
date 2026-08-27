@@ -3,6 +3,7 @@ import { api } from "@/lib/api"
 import { BlockRenderer, type Block } from "@/components/note/BlockRenderer"
 import Recorder from "@/components/note/Recorder"
 import ShareDialog from "@/components/ShareDialog"
+import { VIEW_MODES, setViewMode, viewMode, type ViewMode } from "@/lib/viewMode"
 
 /* The note editor.
 
@@ -17,6 +18,7 @@ type Note = {
   subject?: string
   topic?: string
   body?: string
+  transcript?: string
   blocks?: Block[]
 }
 
@@ -36,6 +38,7 @@ export default function NotePage({ id, onLeave, refresh }: Props) {
   const [live, setLive] = useState("")          // the transcript while recording
   const [recording, setRecording] = useState(false)
   const [showShare, setShowShare] = useState(false)
+  const [view, setView] = useState<ViewMode>(viewMode())
   const fileRef = useRef<HTMLInputElement>(null)
   const saveTimer = useRef<number | undefined>(undefined)
 
@@ -194,6 +197,23 @@ export default function NotePage({ id, onLeave, refresh }: Props) {
         >
           {writing ? "Writing…" : "Write it up"}
         </button>
+        {/* How this student likes to read. Their choice, remembered per device. */}
+        <label className="sr-only" htmlFor="note-view">Reading view</label>
+        <select
+          id="note-view"
+          value={view}
+          onChange={(e) => {
+            const v = e.target.value as ViewMode
+            setView(v)
+            setViewMode(v)
+          }}
+          title={VIEW_MODES.find((m) => m.id === view)?.blurb}
+          className="cursor-pointer rounded-md border bg-card px-2 py-1.5 text-[13px] text-muted-foreground hover:bg-muted"
+        >
+          {VIEW_MODES.map((m) => (
+            <option key={m.id} value={m.id}>{m.name}</option>
+          ))}
+        </select>
         <button
           onClick={() => setShowShare(true)}
           className="rounded-md border px-2.5 py-1.5 text-[13px] text-muted-foreground hover:bg-muted"
@@ -260,7 +280,7 @@ export default function NotePage({ id, onLeave, refresh }: Props) {
               <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-late" />
               Live transcript
             </div>
-            <p className="min-h-[240px] whitespace-pre-wrap font-serif text-[17px] leading-relaxed text-foreground">
+            <p className="min-h-[240px] whitespace-pre-wrap font-serif text-[18.5px] leading-[1.7] text-foreground">
               {live || (
                 <span className="text-muted-foreground">
                   Listening… the first words appear in a few seconds. Keep the
@@ -271,7 +291,7 @@ export default function NotePage({ id, onLeave, refresh }: Props) {
           </div>
         ) : (
           <textarea
-            className="min-h-[200px] w-full resize-y rounded-xl border bg-card px-4 py-3 font-serif text-[16px] leading-relaxed"
+            className="min-h-[200px] w-full resize-y rounded-xl border bg-card px-4 py-3 font-serif text-[17.5px] leading-[1.7]"
             placeholder="Type or paste here — a transcript, rough notes, anything — then press Write it up. Or press Record above and just talk."
             value={body}
             onChange={(e) => onBody(e.target.value)}
@@ -279,11 +299,27 @@ export default function NotePage({ id, onLeave, refresh }: Props) {
         )}
 
         {note.blocks && note.blocks.length > 0 && (
-          <div className="mt-8">
+          <div className="mt-8" data-note-view={view}>
             <div className="mb-3 border-b pb-2 text-[11px] font-semibold uppercase tracking-[0.09em] text-muted-foreground">
               Your notes
             </div>
-            <BlockRenderer blocks={note.blocks} />
+            {view === "split" ? (
+              /* Notes beside the lesson they came from, so the student can
+                 always check a line against what was actually said. */
+              <div className="grid gap-5 lg:grid-cols-2">
+                <BlockRenderer blocks={note.blocks} />
+                <div className="rounded-lg border bg-muted/20 p-4">
+                  <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.09em] text-muted-foreground">
+                    What was said
+                  </div>
+                  <p className="max-h-[70vh] overflow-y-auto whitespace-pre-wrap font-serif text-[15px] leading-[1.7] text-muted-foreground">
+                    {note.transcript?.trim() || "No transcript for this note yet."}
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <BlockRenderer blocks={note.blocks} />
+            )}
           </div>
         )}
       </div>

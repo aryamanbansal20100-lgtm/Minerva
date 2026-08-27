@@ -368,7 +368,7 @@ function OutlineList({
   return (
     <Tag
       className={cn(
-        "font-serif text-[16.5px] leading-[1.68] max-w-[68ch]",
+        "font-serif text-[18px] leading-[1.72] max-w-[68ch]",
         ordered ? "list-decimal" : "list-disc",
         "pl-5 marker:text-muted-foreground",
         nested ? "mt-1.5 ml-1 border-l pl-4" : "space-y-1.5",
@@ -399,7 +399,7 @@ function Callout({ call }: { call: CalloutData }) {
             <p
               key={i}
               className={cn(
-                "font-serif text-[15.5px] leading-[1.6] max-w-[64ch] text-muted-foreground",
+                "font-serif text-[17px] leading-[1.66] max-w-[64ch] text-muted-foreground",
                 style.body,
               )}
             >
@@ -447,7 +447,7 @@ export function Outline({ items }: { items: readonly string[] | undefined }) {
                 className="mt-[5px] shrink-0 text-muted-foreground"
                 aria-hidden="true"
               />
-              <span className="font-serif text-[16.5px] leading-[1.68] max-w-[68ch]">
+              <span className="font-serif text-[18px] leading-[1.72] max-w-[68ch]">
                 <InlineMd text={piece.text} />
               </span>
             </div>
@@ -464,26 +464,32 @@ export function Outline({ items }: { items: readonly string[] | undefined }) {
 function BlockCard({
   label,
   rule,
+  kind,
   children,
 }: {
   label: string;
   rule?: string;
+  kind?: string;
   children: ReactNode;
 }) {
   return (
     <section
+      /* data-block is the hook the reading views restyle through. Keeping it as
+         a data attribute rather than more classes means a view mode is pure CSS
+         and this component never has to know which one is active. */
+      data-block={kind || "block"}
       className={cn(
-        "rounded-lg border bg-card overflow-hidden",
+        "note-block rounded-lg border bg-card overflow-hidden",
         rule && "border-l-2",
         rule,
       )}
     >
-      <div className="px-4 py-2.5 border-b bg-muted/40">
+      <div className="note-block-label px-4 py-2.5 border-b bg-muted/40">
         <span className="text-[11px] font-semibold uppercase tracking-[0.07em] text-muted-foreground">
           {label}
         </span>
       </div>
-      <div className="px-4 py-4">{children}</div>
+      <div className="note-block-body px-4 py-4">{children}</div>
     </section>
   );
 }
@@ -1426,8 +1432,8 @@ function OneBlock({ block }: { block: Block }) {
   switch (block.type) {
     case "summary":
       return (
-        <BlockCard label="In one line">
-          <p className="font-serif text-[18px] leading-[1.6] max-w-[68ch] text-muted-foreground border-l-2 pl-4">
+        <BlockCard label="In one line" kind="summary">
+          <p className="font-serif text-[20.5px] leading-[1.62] max-w-[68ch] text-muted-foreground border-l-2 pl-4">
             <InlineMd text={block.text} />
           </p>
         </BlockCard>
@@ -1435,21 +1441,21 @@ function OneBlock({ block }: { block: Block }) {
 
     case "points":
       return (
-        <BlockCard label={block.heading || "Key points"}>
+        <BlockCard label={block.heading || "Key points"} kind="points">
           <Outline items={block.items} />
         </BlockCard>
       );
 
     case "definitions":
       return (
-        <BlockCard label="Definitions">
+        <BlockCard label="Definitions" kind="definitions">
           <dl className="divide-y">
             {(block.items || []).map((d, i) => (
               <div key={i} className="grid gap-1 py-2.5 first:pt-0 last:pb-0 sm:grid-cols-[180px_1fr] sm:gap-4">
-                <dt className="text-[13.5px] font-semibold">
+                <dt className="text-[14px] font-semibold">
                   <InlineMd text={d.term} />
                 </dt>
-                <dd className="font-serif text-[15.5px] leading-[1.6] text-muted-foreground max-w-[64ch]">
+                <dd className="font-serif text-[17px] leading-[1.66] text-muted-foreground max-w-[64ch]">
                   <InlineMd text={d.meaning} />
                 </dd>
               </div>
@@ -1464,12 +1470,12 @@ function OneBlock({ block }: { block: Block }) {
        converter now. */
     case "formula":
       return (
-        <BlockCard label="Formula">
+        <BlockCard label="Formula" kind="formula">
           <p className="font-mono text-[19px] leading-snug tabular-nums">
             <InlineMath text={block.formula} />
           </p>
           {block.means ? (
-            <p className="mt-2.5 font-serif text-[15.5px] leading-[1.6] text-muted-foreground max-w-[64ch]">
+            <p className="mt-2.5 font-serif text-[17px] leading-[1.66] text-muted-foreground max-w-[64ch]">
               <InlineMath text={block.means} />
             </p>
           ) : null}
@@ -1486,13 +1492,13 @@ function OneBlock({ block }: { block: Block }) {
 
     case "example":
       return (
-        <BlockCard label="Worked example">
+        <BlockCard label="Worked example" kind="example">
           {block.title ? (
             <p className="text-[13.5px] font-semibold mb-2">
               <InlineMd text={block.title} />
             </p>
           ) : null}
-          <ol className="list-decimal pl-5 space-y-1.5 font-serif text-[16.5px] leading-[1.68] max-w-[68ch] marker:text-muted-foreground marker:font-mono marker:text-[13px]">
+          <ol className="list-decimal pl-5 space-y-1.5 font-serif text-[18px] leading-[1.72] max-w-[68ch] marker:text-muted-foreground marker:font-mono marker:text-[13px]">
             {(block.steps || []).map((s, i) => (
               <li key={i}>
                 <InlineMd text={s} />
@@ -1504,14 +1510,14 @@ function OneBlock({ block }: { block: Block }) {
 
     case "assessed":
       return (
-        <BlockCard label="Comes up in assessment" rule="border-l-warn">
+        <BlockCard label="Comes up in assessment" rule="border-l-warn" kind="assessed">
           <Outline items={block.items} />
         </BlockCard>
       );
 
     case "gaps":
       return (
-        <BlockCard label="Ask about next lesson" rule="border-l-info">
+        <BlockCard label="Ask about next lesson" rule="border-l-info" kind="gaps">
           <Outline items={block.items} />
         </BlockCard>
       );
@@ -1521,7 +1527,7 @@ function OneBlock({ block }: { block: Block }) {
     case "diagram": {
       const drawn = <Diagram spec={block.spec} />;
       return (
-        <BlockCard label={block.spec?.title || "Diagram"}>
+        <BlockCard label={block.spec?.title || "Diagram"} kind="diagram">
           {drawn}
           {block.spec?.note ? (
             <p className="mt-2 text-[12.5px] text-muted-foreground">{block.spec.note}</p>
@@ -1572,7 +1578,7 @@ export const BlockRenderer = memo(function BlockRenderer({
   });
   if (!list.length) return null;
   return (
-    <div className={cn("space-y-4", className)}>
+    <div className={cn("note-blocks space-y-4", className)}>
       {list.map((block, i) => (
         <OneBlock key={i} block={block} />
       ))}

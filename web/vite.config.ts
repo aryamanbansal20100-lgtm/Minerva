@@ -16,8 +16,10 @@ export default defineConfig({
     // a share link opened during local dev works instead of hitting the SPA.
     proxy: {
       "/api": { target: "http://localhost:7400", changeOrigin: true },
-      "/s": { target: "http://localhost:7400", changeOrigin: true },
-      "/share-open.js": { target: "http://localhost:7400", changeOrigin: true },
+      // Anchored regexes, NOT "/s" — a bare prefix key also matches /src/main.tsx
+      // and every other path beginning with s, which takes the dev server down.
+      "^/s/[A-Za-z0-9_-]+": { target: "http://localhost:7400", changeOrigin: true },
+      "^/share-open\\.js$": { target: "http://localhost:7400", changeOrigin: true },
     },
   },
 })

@@ -68,7 +68,28 @@ const ENROL_VERSION = 2
    locked out of your own notes by your own laptop is the failure that actually
    hurts, and the account PIN underneath is the credential that really guards the
    account. The Settings copy says so plainly. */
-const MATCH_THRESHOLD = 0.78
+const MATCH_THRESHOLD = 0.72
+/* The bar EASES DOWN while it can see a face, instead of being one fixed number.
+
+   A single threshold has to be wrong somewhere: high enough to refuse a stranger
+   at a glance is high enough to refuse the real student on a bad-hair, bad-light
+   day, and that failure — locked out of your own notes by your own laptop — is
+   the one that actually hurts. A phone feels forgiving because it keeps looking
+   and keeps trying, not because its bar is low.
+
+   So: a face in frame for a moment must clear MATCH_THRESHOLD, and if it keeps
+   sitting there the bar slides toward RELAX_FLOOR over RELAX_MS. A stranger
+   glancing at the camera is gone long before the floor; the real student, who
+   waits because it is their laptop, is in within a few seconds. The account PIN
+   underneath remains the credential that actually guards the account. */
+const RELAX_FLOOR = 0.62
+const RELAX_MS = 4500
+
+/** The bar to beat after a face has been continuously visible for `ms`. */
+export function thresholdAfter(ms: number): number {
+  const k = Math.max(0, Math.min(1, ms / RELAX_MS))
+  return MATCH_THRESHOLD - (MATCH_THRESHOLD - RELAX_FLOOR) * k
+}
 
 export function faceSupported(): boolean {
   return (
@@ -340,6 +361,7 @@ function centreBox(video: HTMLVideoElement): FaceBox | null {
     all or found it and disagreed, and those need opposite fixes. */
 let lastBox: FaceBox | null = null
 let lastBoxWasGuess = false
+let lastDescriptor: Float32Array | null = null
 
 export function lastFaceBox(): { box: FaceBox | null; guessed: boolean } {
   return { box: lastBox, guessed: lastBoxWasGuess }
@@ -350,7 +372,7 @@ export function faceDescriptor(video: HTMLVideoElement): Float32Array | null {
   const box = found || centreBox(video)
   lastBox = box
   lastBoxWasGuess = !found
-  if (!box) return null
+  if (!box) { lastDescriptor = null; return null }
 
   const c = canvasOf("face")
   const ctx = c.getContext("2d", { willReadFrequently: true })
@@ -395,7 +417,37 @@ export function faceDescriptor(video: HTMLVideoElement): Float32Array | null {
     const norm = Math.sqrt(sum) || 1
     for (let b = 0; b < BINS; b++) desc[cell * BINS + b] /= norm
   }
+  lastDescriptor = desc
   return desc
+}
+
+/* LEARN THE FACE IT JUST LET IN.
+
+   A phone gets easier to unlock the more you use it, because every successful
+   unlock is another example of what you look like NOW — this haircut, this
+   room, this lamp. Enrolment alone is a single moment frozen in time, and the
+   student drifts away from it within days, which is what "it worked yesterday"
+   really means.
+
+   So each accepted unlock is appended as an extra template, newest kept and
+   oldest adaptive ones discarded. The original enrolment poses are never
+   dropped, so the set cannot drift away from the person who set it up. */
+const MAX_LEARNED = 10
+
+export function learnFromUnlock(): void {
+  if (!lastDescriptor) return
+  try {
+    const raw = localStorage.getItem(FACE_KEY)
+    if (!raw) return
+    const box = JSON.parse(raw) as { v?: number; poses?: number[][]; learned?: number[][] }
+    if (!box || box.v !== ENROL_VERSION || !Array.isArray(box.poses)) return
+    const learned = Array.isArray(box.learned) ? box.learned : []
+    learned.push(Array.from(lastDescriptor, (v) => Math.round(v * 1000) / 1000))
+    while (learned.length > MAX_LEARNED) learned.shift()
+    localStorage.setItem(FACE_KEY, JSON.stringify({ ...box, learned }))
+  } catch {
+    /* storage full or unavailable: unlocking still worked, it just will not adapt */
+  }
 }
 
 export function cosineSim(a: Float32Array, b: Float32Array): number {
@@ -494,14 +546,14 @@ function loadTemplates(): Float32Array[] {
     return []
   }
   // Current format is {v, poses}; anything else is from an older build.
-  const box = parsed as { v?: number; poses?: number[][] }
+  const box = parsed as { v?: number; poses?: number[][]; learned?: number[][] }
   if (!box || typeof box !== "object" || box.v !== ENROL_VERSION
       || !Array.isArray(box.poses) || !Array.isArray(box.poses[0])) {
     discardStaleEnrolment()
     return []
   }
   const want = (FACE_PX / CELL) * (FACE_PX / CELL) * BINS
-  const rows = (box.poses as number[][])
+  const rows = ([...box.poses, ...(Array.isArray(box.learned) ? box.learned : [])] as number[][])
     .filter((r) => Array.isArray(r) && r.length === want)
     .map((r) => Float32Array.from(r))
   // Something was stored, but none of it is usable by this build.

@@ -2,6 +2,8 @@ import { useCallback, useEffect, useRef, useState } from "react"
 import {
   enrollFace,
   matchThreshold,
+  learnFromUnlock,
+  thresholdAfter,
   openCamera,
   readFace,
   stopCamera,
@@ -45,7 +47,8 @@ export default function FaceCapture({
     box: { x: number; y: number; size: number } | null
     guessed: boolean
     score: number
-  }>({ box: null, guessed: false, score: 0 }) // 0..1, drives the ring
+    need: number
+  }>({ box: null, guessed: false, score: 0, need: matchThreshold() }) // 0..1, drives the ring
   const [hint, setHint] = useState(
     mode === "enroll"
       ? "Centre your face, then press Start."
@@ -106,24 +109,31 @@ export default function FaceCapture({
     if (mode !== "verify" || !ready) return
     let alive = true
     let streak = 0
-    const th = matchThreshold()
+    // When the face first came into view, so the bar can ease down while the
+    // student sits there waiting rather than refusing them at a fixed number.
+    let seenSince = 0
     const tick = () => {
       if (!alive || !videoRef.current) return
       const { score, faceFound, box, guessed } = readFace(videoRef.current)
-      setSeen({ box, guessed, score })
+      setSeen({ box, guessed, score, need: seenSince ? thresholdAfter(Date.now() - seenSince) : matchThreshold() })
 
       if (!faceFound) {
         streak = 0
+        seenSince = 0
         setProgress(0)
         setHint("Move into the frame — make sure your face is lit from the front.")
         window.setTimeout(tick, 160)
         return
       }
 
+      if (!seenSince) seenSince = Date.now()
+      const th = thresholdAfter(Date.now() - seenSince)
       setProgress(Math.max(0, Math.min(1, score / th)))
       if (score >= th) {
         streak += 1
         if (streak >= 2) {
+          // Remember today's face, so tomorrow's hair and lamp still match.
+          learnFromUnlock()
           onSuccess()
           return
         }
@@ -206,7 +216,7 @@ export default function FaceCapture({
                       : "face found"
                     : "looking…"}
                   {" · "}
-                  {Math.round(seen.score * 100)}/{Math.round(matchThreshold() * 100)}
+                  {Math.round(seen.score * 100)}/{Math.round(seen.need * 100)}
                 </>
               ) : (
                 <>{pct}%</>

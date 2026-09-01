@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react"
+import { setRecording } from "@/lib/recordingState"
 import { api } from "@/lib/api"
 import { cn } from "@/lib/utils"
 
@@ -158,6 +159,51 @@ export default function Recorder({ noteId, onError, onFinished, onTranscript }: 
   const [level, setLevel] = useState(0)
   const [coachKey, setCoachKey] = useState<CoachKey | null>(null)
   const [caption, setCaption] = useState("Press record when the lesson starts.")
+  /* KEEP THE LAPTOP AWAKE WHILE RECORDING.
+
+     A lesson is forty minutes during which nobody touches the laptop, so Windows
+     idle-sleeps it, the browser is suspended, and the recording simply dies
+     mid-class — the student finds out afterwards, when the notes are half a
+     lesson long. The Screen Wake Lock API is the browser's own answer to exactly
+     this, needs no permission prompt and no dependency.
+
+     Two things to know about it: the lock is released automatically whenever the
+     page is hidden, so it has to be re-taken when the tab comes back; and it
+     cannot defeat the lid being physically closed, which suspends the machine no
+     matter what. It handles idle sleep, which is the case that actually bites. */
+  const wake = useRef<WakeLockSentinel | null>(null)
+
+  const holdWakeLock = async () => {
+    try {
+      if (!("wakeLock" in navigator) || wake.current) return
+      wake.current = await navigator.wakeLock.request("screen")
+      wake.current.addEventListener("release", () => { wake.current = null })
+    } catch {
+      /* refused or unsupported: recording still works, the laptop may just sleep */
+    }
+  }
+
+  const dropWakeLock = () => {
+    try {
+      wake.current?.release()
+    } catch {
+      /* already gone */
+    }
+    wake.current = null
+  }
+
+  // The browser drops the lock every time the tab hides; take it back on return.
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState === "visible" && on) void holdWakeLock()
+    }
+    document.addEventListener("visibilitychange", onVisible)
+    return () => {
+      document.removeEventListener("visibilitychange", onVisible)
+      dropWakeLock()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [on])
   const quiet = useRef(0)
   const loud = useRef(0)
 
@@ -169,6 +215,7 @@ export default function Recorder({ noteId, onError, onFinished, onTranscript }: 
       if (m.tick) clearInterval(m.tick)
       m.stream?.getTracks().forEach((t) => t.stop())
       m.ctx?.close().catch(() => {})
+      setRecording(false)
     }
   }, [])
 
@@ -293,6 +340,8 @@ export default function Recorder({ noteId, onError, onFinished, onTranscript }: 
       m.stream?.getTracks().forEach((t) => t.stop())
       return onError?.((e as Error).message)
     }
+    void holdWakeLock()          // the lesson is starting; do not let it sleep
+    setRecording(true)           // and do not let the lock unmount us mid-lesson
     m.idx = 0
     m.busy = 0
     m.t0 = Date.now()
@@ -343,6 +392,8 @@ export default function Recorder({ noteId, onError, onFinished, onTranscript }: 
     const m = R.current
     const id = m.id
     const seconds = Math.round((Date.now() - m.t0) / 1000)
+    dropWakeLock()               // lesson over; let the laptop sleep normally
+    setRecording(false)
     m.id = null
     setOn(false)
     if (m.roll) {

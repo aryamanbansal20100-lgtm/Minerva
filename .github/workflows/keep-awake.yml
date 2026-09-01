@@ -1,0 +1,39 @@
+# Keep the Render service from going to sleep.
+#
+# Render's free tier spins a web service down after ~15 minutes with no traffic,
+# and the next request then has to boot the whole process — which is the "I open
+# it and nothing comes, I have to refresh" delay of 30-60 seconds. That is the
+# plan behaving as designed, not a fault in the app.
+#
+# A request every 10 minutes counts as traffic, so the service never idles long
+# enough to be put to sleep. One always-on service fits inside the free tier's
+# 750 instance-hours a month, so this costs nothing.
+#
+# Two things worth knowing:
+#  - GitHub disables scheduled workflows after 60 days without repo activity.
+#    Push anything, or press "Run workflow" in the Actions tab, to re-arm it.
+#  - Cron on GitHub is best-effort and can run late under load; a few minutes of
+#    drift is harmless here, because the window before sleeping is 15.
+name: Keep Minerva awake
+
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch:        # so it can also be run by hand from the Actions tab
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Wake the API
+        run: |
+          # --max-time is generous on purpose: if the service HAS gone to sleep,
+          # this request is the one paying the cold-start cost.
+          code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 90 \
+            https://minerva-api-1nni.onrender.com/ || echo "000")
+          echo "Minerva responded: $code"
+          # A 5xx still means the service is awake, so only a total failure to
+          # connect is worth failing the job over.
+          if [ "$code" = "000" ]; then
+            echo "::warning::Could not reach Minerva at all."
+          fi

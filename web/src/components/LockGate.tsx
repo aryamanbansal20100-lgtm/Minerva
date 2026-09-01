@@ -10,6 +10,7 @@ import {
   markPassed,
   unlockFingerprint,
 } from "@/lib/applock"
+import { isRecording } from "@/lib/recordingState"
 import { useAuth } from "@/lib/auth"
 import { watchForSleep } from "@/lib/sleepwatch"
 import MinervaMark from "@/components/MinervaMark"
@@ -113,6 +114,10 @@ export default function LockGate({ children }: { children: React.ReactNode }) {
     // Only meaningful once something actually locks this app.
     if (required !== true && device === "none") return
     return watchForSleep(() => {
+      /* Never mid-lesson. Locking unmounts the app, which tears down the
+         microphone and loses the recording — so a lesson in progress wins over
+         an automatic re-lock. A manual lock and a fresh page load still lock. */
+      if (isRecording()) return
       clearPassed()
       setPassed(false)
       setUsePin(device === "none")

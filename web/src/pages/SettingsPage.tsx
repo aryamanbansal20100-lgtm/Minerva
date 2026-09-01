@@ -63,6 +63,9 @@ export type EngineStatus = {
   model?: string | null;
   engine?: string | null;
   reason?: string | null;
+  gemini?: boolean | null;
+  writer?: string | null;
+  note_warning?: string | null;
 };
 
 export type TlsStatus = { relaxed_strict_x509?: boolean };
@@ -1326,6 +1329,27 @@ export function SettingsPage({ state, refresh }: SettingsPageProps) {
                 )}
               </span>
             </li>
+            {/* Which model actually writes the notes. Without a Gemini key every
+                note is written by Groq in small slices and comes out a fraction
+                of the length — previously invisible, so a missing key looked
+                like the app simply writing badly. */}
+            {ai?.ok && ai?.note_warning ? (
+              <li className="flex items-start gap-2">
+                <Dot tone="late" />
+                <span className="text-muted-foreground">
+                  Note writing:{" "}
+                  <b className="text-foreground">short notes</b> — {text(ai.note_warning)}
+                </span>
+              </li>
+            ) : ai?.ok && ai?.writer ? (
+              <li className="flex items-start gap-2">
+                <Dot tone="ok" />
+                <span className="text-muted-foreground">
+                  Note writing:{" "}
+                  <span className="font-mono text-foreground">{text(ai.writer)}</span>
+                </span>
+              </li>
+            ) : null}
             <li className="flex items-start gap-2">
               <Dot tone={stt?.ok ? "ok" : "late"} />
               <span className="text-muted-foreground">

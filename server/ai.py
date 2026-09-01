@@ -173,10 +173,20 @@ def status() -> dict:
     # Use a model the catalogue already confirmed if we have one cached; never
     # trigger a fetch from here.
     model = config.env("GROQ_MODEL") or BIG
+    # Gemini is the model that actually writes a full note; without it every
+    # note falls back to Groq in small slices and comes out a fraction of the
+    # length. That was invisible here, so a missing key looked like bad writing.
+    gem = gemini_ready()
     return {"ok": ok, "model": model,
+            "gemini": gem,
+            "writer": "Gemini (full lesson)" if gem else "Groq (short slices)",
             "last_error": _last_error,
             "reason": "" if ok else
-                      "no GROQ_API_KEY in .env — get a free one at console.groq.com/keys"}
+                      "no GROQ_API_KEY in .env — get a free one at console.groq.com/keys",
+            "note_warning": "" if gem else
+                            "No GEMINI_API_KEY, so notes are written by Groq in "
+                            "small slices and will be much shorter. Add a free "
+                            "key at aistudio.google.com/apikey for full notes."}
 
 
 # NVIDIA's hosted catalogue speaks the same OpenAI dialect as Groq, so the only
@@ -1100,8 +1110,14 @@ def compose(pieces: list[dict], profile: dict, subject: str, topic: str,
     # condensed pass is lossy by construction; with the real words available the
     # note can carry the detail a student would otherwise have to re-listen for.
     if transcript:
-        payload["transcript"] = transcript[:24000]
-    body = json.dumps(payload, ensure_ascii=False)[:120000]
+        # An hour of speech is roughly 50,000 characters. The old 24,000 cap
+        # therefore threw away MORE THAN HALF of a normal lesson before the
+        # model saw a word of it, and then asked for complete notes from the
+        # remainder -- which is most of why notes came back short no matter what
+        # the prompt demanded. Gemini's context is measured in hundreds of
+        # thousands of tokens; a whole lesson fits several times over.
+        payload["transcript"] = transcript[:400000]
+    body = json.dumps(payload, ensure_ascii=False)[:600000]
     out = gemini_json(system, body) if gemini_ready() else None
     if not out and transcript:
         out = _sectioned_tidy(system, transcript)
@@ -1654,7 +1670,7 @@ def tidy(text: str, profile: dict, subject: str, topic: str) -> dict:
     # prompt, so asking it for 16,000 was guaranteed to 413 and drop straight to
     # the fallback. That single line is why pasting a transcript returned the
     # transcript back as bullets.
-    out = gemini_json(system, text[:120000]) if gemini_ready() else None
+    out = gemini_json(system, text[:400000]) if gemini_ready() else None
     if not out:
         out = _sectioned_tidy(system, text)
     if not out:

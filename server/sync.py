@@ -413,6 +413,7 @@ def push_all() -> dict:
     else:
         message = ("Nothing could be saved. "
                    + (cloud.status().get("last_error")
-                      or "Firestore refused every write — check the rules were "
-                         "published to Firestore, not Realtime Database."))
+                      or "Firestore refused every write. If the error mentions "
+                         "401/UNAUTHENTICATED, sign out and back in; if it "
+                         "mentions 403/PERMISSION_DENIED, publish the rules."))
     return {"ok": ok, "done": done, "failed": failed[:8], "message": message}

@@ -25,6 +25,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { StatRow, type Stat } from "@/components/StatRow";
 import { apiGet, apiPost } from "@/lib/api";
+import { forceRefreshToken } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { SCHOOL_EMAIL_ENABLED } from "@/lib/firebase";
 import {
@@ -291,6 +292,10 @@ export function SettingsPage({ state, refresh }: SettingsPageProps) {
     setProbing(true);
     setProbe(null);
     try {
+      // A stale ID token is accepted by our own server but REJECTED by
+      // Firestore with a 401, which is what made every write fail silently.
+      // Mint a fresh one before asking the server to talk to the cloud.
+      await forceRefreshToken();
       const out = await apiPost<{ ok: boolean; message: string }>(
         "/api/backup/now", {},
       );
@@ -310,6 +315,10 @@ export function SettingsPage({ state, refresh }: SettingsPageProps) {
     setProbing(true);
     setProbe(null);
     try {
+      // A stale ID token is accepted by our own server but REJECTED by
+      // Firestore with a 401, which is what made every write fail silently.
+      // Mint a fresh one before asking the server to talk to the cloud.
+      await forceRefreshToken();
       const out = await apiPost<{ ok: boolean; message: string }>(
         "/api/backup/restore", {},
       );

@@ -60,7 +60,13 @@ function headersFor(
   return headers;
 }
 
-/** Force-mint a fresh ID token. Returns false when there is nobody signed in. */
+/** Force-mint a fresh ID token. Returns false when there is nobody signed in.
+
+    Exported as `forceRefreshToken` below, because the automatic path only fires
+    when OUR server answers 401 — and the failure that actually bit was Firestore
+    answering 401 deep inside a request, where the browser never sees it and so
+    never refreshes. Anything that makes the server talk to Firestore on our
+    behalf should mint a fresh token first. */
 async function refreshIdToken(): Promise<boolean> {
   const user = auth.currentUser;
   if (!user) return false;
@@ -261,6 +267,11 @@ export async function apiBlob(path: string): Promise<Blob> {
 }
 
 /** Grouped form, for call sites that read better as api.get / api.post. */
+/** Guarantee the next call carries a freshly minted ID token. */
+export async function forceRefreshToken(): Promise<boolean> {
+  return refreshIdToken();
+}
+
 export const api = {
   get: apiGet,
   post: apiPost,

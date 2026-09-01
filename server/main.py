@@ -903,13 +903,29 @@ class Handler(SimpleHTTPRequestHandler):
                 say = "Sign in with Google to back your notes up."
             elif st["failed"] and not st["saved"]:
                 verdict = "failing"
-                say = ("Nothing is reaching the cloud. Firestore is rejecting "
-                       "every write — publish the rules in firestore.rules. "
-                       "Your notes are still safe on this device.")
+                # Say which failure it actually is. A 401 and a 403 need
+                # completely different fixes, and telling someone to go and
+                # publish security rules when their sign-in has simply gone
+                # stale sends them to the Firebase console for nothing.
+                err = str(st.get("last_error") or "")
+                if "401" in err or "UNAUTHENTICATED" in err:
+                    say = ("Nothing is reaching the cloud: the cloud is refusing "
+                           "this sign-in. Sign out and back in, then press "
+                           "“Back up everything now”. Your notes are "
+                           "still safe on this device.")
+                elif "403" in err or "PERMISSION_DENIED" in err:
+                    say = ("Nothing is reaching the cloud: the cloud rules are "
+                           "refusing these writes — publish the rules in "
+                           "firestore.rules (Firebase console → Firestore "
+                           "→ Rules). Your notes are still safe on this "
+                           "device.")
+                else:
+                    say = ("Nothing is reaching the cloud. Your notes are still "
+                           "safe on this device. Details: " + (err or "unknown"))
             elif st["failed"]:
                 verdict = "partial"
-                say = ("Some things saved and some failed. Check the rules in "
-                       "firestore.rules.")
+                say = ("Some things saved and some failed. Details: "
+                       + (str(st.get("last_error") or "") or "unknown"))
             elif st["saved"]:
                 verdict = "ok"
                 say = "Your notes are backed up and will follow you to any device."

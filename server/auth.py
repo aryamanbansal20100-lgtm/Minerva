@@ -35,6 +35,26 @@ class AuthError(Exception):
     pass
 
 
+def _expiry_of(token: str) -> float:
+    """The `exp` claim of a JWT, as a unix time, or +inf if it cannot be read.
+
+    Only used to SHORTEN a cache entry, never to grant access, so reading it
+    without verifying the signature is safe: Google has already vouched for the
+    token by the time this is called.
+    """
+    import base64
+    import json as _json
+    try:
+        payload = token.split(".")[1]
+        payload += "=" * (-len(payload) % 4)          # restore base64 padding
+        exp = _json.loads(base64.urlsafe_b64decode(payload)).get("exp")
+        # A minute of margin, so a token cannot be handed to Firestore just as
+        # it dies in flight.
+        return float(exp) - 60 if exp else float("inf")
+    except Exception:
+        return float("inf")
+
+
 def required() -> bool:
     return config.env("EVIE_REQUIRE_AUTH", "1") == "1"
 
@@ -102,7 +122,15 @@ def verify(token: str) -> dict:
     if not user["uid"]:
         raise AuthError("Google returned no account id")
 
-    _cache[token] = (time.time() + CACHE_SECONDS, user)
+    # Never cache a token past its OWN expiry.
+    #
+    # Caching a fixed 900 seconds meant a token verified late in its life stayed
+    # "valid" here after Google had stopped honouring it. Our own endpoints kept
+    # working while every Firestore write came back 401 UNAUTHENTICATED -- so the
+    # app looked fine and the cloud backup silently saved nothing. The expiry is
+    # readable from the JWT payload without verifying it (we have just had Google
+    # verify the token itself), so cap the cache at whichever comes first.
+    _cache[token] = (min(time.time() + CACHE_SECONDS, _expiry_of(token)), user)
     if len(_cache) > 64:                       # tiny, single-user; keep it tidy
         for stale in [k for k, (exp, _) in _cache.items() if exp < time.time()]:
             _cache.pop(stale, None)

@@ -179,14 +179,32 @@ def delete(uid: str, collection: str, doc_id: str) -> bool:
 
 
 def fetch(uid: str, collection: str, limit: int = 300) -> list[dict]:
-    out = _call("GET", f"/users/{uid}/{collection}", None, f"pageSize={limit}")
-    if not out:
-        return []
-    rows = []
-    for doc in out.get("documents", []):
-        row = from_doc(doc)
-        row.setdefault("id", (doc.get("name") or "").rsplit("/", 1)[-1])
-        rows.append(row)
+    """Every document in the collection — following the pages to the end.
+
+    This used to ask for one page and throw the continuation token away, so a
+    student with more than a page of notes got a restore that stopped partway
+    and said nothing about it. "It restored but not completely" is exactly that
+    bug: the missing notes were sitting in Firestore the whole time, on page two.
+
+    `limit` is the page size, not a cap on the total. The page loop is bounded
+    so a malformed or looping response can never spin here for ever.
+    """
+    rows: list[dict] = []
+    token = ""
+    for _ in range(200):                       # 200 pages is far past any student
+        params = f"pageSize={limit}"
+        if token:
+            params += "&pageToken=" + urllib.parse.quote(token)
+        out = _call("GET", f"/users/{uid}/{collection}", None, params)
+        if not out:
+            break
+        for doc in out.get("documents", []):
+            row = from_doc(doc)
+            row.setdefault("id", (doc.get("name") or "").rsplit("/", 1)[-1])
+            rows.append(row)
+        token = out.get("nextPageToken") or ""
+        if not token:
+            break
     return rows
 
 

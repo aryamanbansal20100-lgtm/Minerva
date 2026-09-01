@@ -121,12 +121,34 @@ def pick(choices: list) -> str:
     return live[0] if live else choices[0]
 
 
+def _pinned(key: str, choices: list) -> str:
+    """Honour a model pinned in the environment ONLY while it actually works.
+
+    A pinned name used to win outright, so one retired model in a .env broke
+    every AI feature in the app with a 404 and no way back -- the catalogue
+    lookup and the whole fallback ladder below were skipped entirely. Now a pin
+    is a preference: it is used when the account can really reach it, and quietly
+    stepped over when Groq has retired it or marked it dead this session.
+    """
+    want = config.env(key)
+    if not want:
+        return pick(choices)
+    if want in _dead:
+        return pick(choices)
+    have = catalogue()
+    # An empty catalogue means we could not ask (no key, network down) rather
+    # than "nothing exists", so the pin still gets its chance.
+    if have and want not in have:
+        return pick(choices)
+    return want
+
+
 def big() -> str:
-    return config.env("GROQ_MODEL") or pick(BIG_CHOICES)
+    return _pinned("GROQ_MODEL", BIG_CHOICES)
 
 
 def small() -> str:
-    return config.env("GROQ_SMALL_MODEL") or pick(SMALL_CHOICES)
+    return _pinned("GROQ_SMALL_MODEL", SMALL_CHOICES)
 
 
 class AIUnavailable(Exception):

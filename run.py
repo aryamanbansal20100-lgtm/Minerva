@@ -22,7 +22,12 @@ TEMPLATE = """# Minerva. Copy of .env.example — keys live here, never in the b
 # The one key that matters. Free, no card: https://console.groq.com/keys
 # Turns on BOTH the note-writing brain and the class transcription.
 GROQ_API_KEY=
-GROQ_MODEL=llama-3.3-70b-versatile
+# No GROQ_MODEL line on purpose. Groq retires model names without warning, and
+# a name pinned here silently OVERRIDES the live model list in ai.py -- which is
+# exactly how every request ended up answering
+# "llama-3.3-70b-versatile does not exist". Left unset, the app asks Groq which
+# models the key can actually use and picks a working one. Only set this if you
+# deliberately want to force one specific model.
 GROQ_STT_MODEL=whisper-large-v3-turbo
 
 # Minutes per audio slice. Each slice is transcribed while the lesson runs,

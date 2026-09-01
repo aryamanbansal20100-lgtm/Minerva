@@ -1164,8 +1164,15 @@ class Handler(SimpleHTTPRequestHandler):
                                             payload.get("new", ""))
             except ValueError as exc:
                 return self._json({"error": str(exc)}, 400)
-            for note in store.notes(limit=500):
-                sync.push_note(note)
+            # Re-read each note IN FULL before mirroring. store.notes() is a
+            # list projection with no body/blocks/transcript, and handing those
+            # rows to the mirror overwrote 500 notes in the cloud with empty
+            # ones -- invisibly, because the local copies were untouched, right
+            # up until a redeploy wiped the disk and restored the emptiness.
+            for row in store.notes(limit=10000):
+                full = store.get_note(row["id"])
+                if full:
+                    sync.push_note(full)
             return self._json(out)
 
         if path == "/api/notebook/delete":
@@ -1289,7 +1296,11 @@ class Handler(SimpleHTTPRequestHandler):
 
         if path == "/api/timetable/save":
             periods = timetable.normalise(payload.get("periods") or [])
-            store.save_profile({"timetable": periods})
+            saved = store.save_profile({"timetable": periods})
+            # Mirror it. Without this the timetable existed ONLY on the disk of a
+            # host that wipes its disk on every deploy, so it vanished on the
+            # next redeploy with nothing to restore it from.
+            sync.push_profile(saved)
             return self._json({"ok": True, "periods": periods,
                                "by_day": timetable.by_day(periods)})
 

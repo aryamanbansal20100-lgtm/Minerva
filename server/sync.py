@@ -38,8 +38,35 @@ def _fire(fn, *args) -> None:
 
 
 def push_note(note: dict) -> None:
-    if not note:
+    """Mirror one note. REFUSES to mirror a partial row.
+
+    This function destroyed a term of work once and must never be able to again.
+    store.notes() returns a LIST PROJECTION -- id, title, subject, a 240-char
+    preview -- with no body, blocks or transcript. Handed one of those, the code
+    below happily defaulted all three to empty, and cloud.put builds its
+    updateMask from exactly the keys it is given, so Firestore was PATCHed to
+    body="", blocks=[], transcript="". The local copy was untouched, so nothing
+    looked wrong until the host wiped its disk and restored the emptiness.
+
+    So a projection row is now detected (it carries "preview"/"size" and lacks
+    "blocks") and the note re-read in full. And as a last line of defence, a note
+    that would mirror as completely empty is checked against the database first:
+    if the stored note actually HAS content, the write is dropped rather than
+    allowed to blank a good backup.
+    """
+    if not note or not note.get("id"):
         return
+    if "preview" in note or "size" in note or "blocks" not in note or "body" not in note:
+        full = store.get_note(note["id"])
+        if not full:
+            return
+        note = full
+    # Never let an empty note overwrite a backup that has something in it.
+    if not (note.get("body") or note.get("blocks") or note.get("transcript")):
+        stored = store.get_note(note["id"])
+        if stored and (stored.get("body") or stored.get("blocks")
+                       or stored.get("transcript")):
+            return
     _fire(lambda uid, n: cloud.put(uid, "notes", n["id"], {
         "id": n["id"], "title": n.get("title", ""), "body": n.get("body", ""),
         "blocks": n.get("blocks", []), "transcript": n.get("transcript", ""),
